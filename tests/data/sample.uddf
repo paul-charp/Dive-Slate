@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<uddf xmlns="http://www.streit.cc/uddf/3.2/" version="3.2.0">
+  <generator>
+    <name>diveslate test fixture</name>
+  </generator>
+  <gasdefinitions>
+    <mix id="air">
+      <name>Air</name>
+      <o2>0.21</o2>
+      <n2>0.79</n2>
+      <he>0.0</he>
+    </mix>
+    <mix id="ean50">
+      <name>EAN50</name>
+      <o2>0.50</o2>
+      <n2>0.50</n2>
+      <he>0.0</he>
+    </mix>
+  </gasdefinitions>
+  <profiledata>
+    <repetitiongroup id="rg1">
+      <dive id="d1">
+        <informationbeforedive>
+          <datetime>2026-05-04T10:15:00</datetime>
+          <divenumber>42</divenumber>
+        </informationbeforedive>
+        <tankdata>
+          <link ref="air"/>
+          <tankvolume>11.0</tankvolume>
+          <tankpressurebegin>23000000</tankpressurebegin>
+          <tankpressureend>9000000</tankpressureend>
+        </tankdata>
+        <samples>
+          <waypoint>
+            <depth>0.0</depth>
+            <divetime>0</divetime>
+            <temperature>291.15</temperature>
+            <switchmix ref="air"/>
+          </waypoint>
+          <waypoint>
+            <depth>18.0</depth>
+            <divetime>60</divetime>
+          </waypoint>
+          <waypoint>
+            <depth>38.0</depth>
+            <divetime>120</divetime>
+            <temperature>285.15</temperature>
+          </waypoint>
+          <waypoint>
+            <depth>37.5</depth>
+            <divetime>240</divetime>
+            <decostop kind="mandatory" decodepth="6.0" duration="180"/>
+          </waypoint>
+          <waypoint>
+            <depth>20.0</depth>
+            <divetime>900</divetime>
+            <decostop kind="mandatory" decodepth="6.0" duration="180"/>
+          </waypoint>
+          <waypoint>
+            <depth>9.0</depth>
+            <divetime>1320</divetime>
+            <switchmix ref="ean50"/>
+            <decostop kind="mandatory" decodepth="6.0" duration="180"/>
+          </waypoint>
+          <waypoint>
+            <depth>3.0</depth>
+            <divetime>1680</divetime>
+            <decostop kind="safety" decodepth="3.0" duration="180"/>
+          </waypoint>
+          <waypoint>
+            <depth>0.0</depth>
+            <divetime>1800</divetime>
+            <temperature>290.15</temperature>
+          </waypoint>
+        </samples>
+        <informationafterdive>
+          <greatestdepth>38.0</greatestdepth>
+          <averagedepth>19.4</averagedepth>
+          <diveduration>1800</diveduration>
+          <lowesttemperature>285.15</lowesttemperature>
+        </informationafterdive>
+      </dive>
+    </repetitiongroup>
+  </profiledata>
+</uddf>

@@ -1,0 +1,37 @@
+<divelog program='subsurface' version='3'>
+<divesites>
+<site uuid='aa11bb22' name='Test Wreck'>
+</site>
+</divesites>
+<dives>
+<dive number='42' rating='4' sac='16.0 l/min' otu='20' cns='8%' tags='deco,test' divesiteid='aa11bb22' date='2026-05-04' time='10:15:00' duration='30:00 min'>
+  <buddy>Test Buddy</buddy>
+  <notes>Synthetic fixture.</notes>
+  <cylinder size='11.0 l' workpressure='232.0 bar' description='D11' start='230.0 bar' end='90.0 bar' />
+  <cylinder size='5.7 l' workpressure='207.0 bar' description='AL40' o2='50.0%' start='150.0 bar' end='120.0 bar' />
+  <divecomputer model='Test Computer' deviceid='deadbeef' diveid='12345678'>
+  <depth max='38.0 m' mean='19.4 m' />
+  <temperature water='12.0 C' />
+  <surface pressure='1.013 bar' />
+  <water salinity='1030 g/l' />
+  <extradata key='Deco model' value='GF 40/85' />
+  <event time='0:30 min' type='25' flags='2' name='gaschange' cylinder='0' />
+  <event time='22:00 min' type='25' flags='1' name='gaschange' cylinder='1' o2='50.0%' />
+  <sample time='0:00 min' depth='0.0 m' temp='18.0 C' ndl='99:00 min' />
+  <sample time='1:00 min' depth='18.0 m' />
+  <sample time='2:00 min' depth='38.0 m' temp='12.0 C' />
+  <sample time='3:00 min' depth='38.0 m' />
+  <sample time='4:00 min' depth='37.5 m' in_deco='1' stopdepth='6.0 m' stoptime='3:00 min' tts='12:00 min' />
+  <sample time='5:00 min' depth='37.0 m' />
+  <sample time='6:00 min' depth='36.0 m' stopdepth='9.0 m' />
+  <sample time='10:00 min' depth='30.0 m' cns='5%' />
+  <sample time='15:00 min' depth='20.0 m' stopdepth='6.0 m' />
+  <sample time='22:00 min' depth='9.0 m' stopdepth='6.0 m' />
+  <sample time='25:00 min' depth='6.0 m' stopdepth='3.0 m' />
+  <sample time='28:00 min' depth='3.0 m' in_deco='0' stopdepth='0.0 m' ndl='99:00 min' />
+  <sample time='29:00 min' depth='3.0 m' />
+  <sample time='30:00 min' depth='0.0 m' temp='17.0 C' />
+  </divecomputer>
+</dive>
+</dives>
+</divelog>

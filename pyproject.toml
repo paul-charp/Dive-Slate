@@ -1,0 +1,93 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "diveslate"
+version = "0.1.0"
+description = "Render a Subsurface or UDDF dive log into a single transparent image of the dive profile."
+readme = "README.md"
+requires-python = ">=3.14"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Paul Charpentier", email = "paul.charpentier.99@gmail.com" }]
+keywords = [
+    "diving",
+    "scuba",
+    "dive-log",
+    "dive-profile",
+    "subsurface",
+    "uddf",
+    "svg",
+    "visualization",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Multimedia :: Graphics",
+    "Topic :: Scientific/Engineering :: Visualization",
+    "Typing :: Typed",
+]
+
+# The library core renders SVG with the standard library alone. Everything that
+# needs a native dependency lives behind an extra, so `pip install diveslate`
+# stays a pure-Python install.
+dependencies = []
+
+[project.optional-dependencies]
+# Rasterisation to PNG. `png` is the one to install: resvg ships self-contained
+# wheels on every major platform and renders SVG text. `cairo` is an alternative
+# for environments that already have a system cairo (most Linux distros); it is
+# not the default because a stock Windows box has no cairo library and cairosvg
+# fails at first use rather than at import.
+png = ["resvg-py>=0.4"]
+cairo = ["cairosvg>=2.7"]
+cli = ["rich>=15.0.0"]
+all = ["diveslate[png,cli]"]
+
+[project.urls]
+Homepage = "https://github.com/paul-charp/Dive-Slate"
+Repository = "https://github.com/paul-charp/Dive-Slate"
+Issues = "https://github.com/paul-charp/Dive-Slate/issues"
+
+[project.scripts]
+diveslate = "diveslate.cli:main"
+
+# Log parsers are discovered from the "diveslate.parsers" entry-point group
+# (see src/diveslate/registry.py). Adding a format means adding an entry here;
+# the registry loads each entry point lazily, so a broken third-party parser
+# cannot take down the built-in ones.
+[project.entry-points."diveslate.parsers"]
+subsurface = "diveslate.parsers.subsurface:SubsurfaceParser"
+uddf = "diveslate.parsers.uddf:UddfParser"
+
+# Each theme is validated as a palette against the surface it assumes (see the
+# module docstring in render/theme.py). Adding one means running that validation,
+# not picking colours that look nice.
+[project.entry-points."diveslate.themes"]
+slate = "diveslate.render.theme:SLATE"
+light = "diveslate.render.theme:LIGHT"
+
+[tool.ruff]
+line-length = 88
+target-version = "py314"
+
+[tool.mypy]
+strict = true
+python_version = "3.14"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "mypy>=2.1.0",
+    "pytest>=9.0.3",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.15.14",
+]

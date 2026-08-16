@@ -1,0 +1,255 @@
+{
+  "schema": 1,
+  "source": "sample.uddf",
+  "program": "diveslate test fixture",
+  "dive_count": 1,
+  "sites": {},
+  "dives": [
+    {
+      "number": 42,
+      "when": "2026-05-04T10:15:00",
+      "site": null,
+      "buddy": null,
+      "notes": null,
+      "rating": null,
+      "duration_s": 1800.0,
+      "max_depth_m": 38.0,
+      "mean_depth_m": 19.4,
+      "water_temp_c": 12.0,
+      "surface_pressure_bar": null,
+      "salinity_g_l": null,
+      "sac_l_min": null,
+      "otu": null,
+      "cns": null,
+      "computer": null,
+      "deco_model": null,
+      "tags": [],
+      "cylinders": [
+        {
+          "gas": {
+            "o2": 0.21,
+            "he": 0.0,
+            "n2": 0.79,
+            "is_air": true,
+            "name": "Air",
+            "mod_m_ppo2_1_4": 56.666667,
+            "mod_m_ppo2_1_6": 66.190476
+          },
+          "description": null,
+          "size_l": 11.0,
+          "work_pressure_bar": null,
+          "start_bar": 230.0,
+          "end_bar": 90.0,
+          "used_bar": 140.0,
+          "used_l": 1540.0,
+          "label": "Air"
+        }
+      ],
+      "gas_switches": [
+        {
+          "time_s": 0.0,
+          "gas": {
+            "o2": 0.21,
+            "he": 0.0,
+            "n2": 0.79,
+            "is_air": true,
+            "name": "Air",
+            "mod_m_ppo2_1_4": 56.666667,
+            "mod_m_ppo2_1_6": 66.190476
+          },
+          "cylinder_index": null
+        },
+        {
+          "time_s": 1320.0,
+          "gas": {
+            "o2": 0.5,
+            "he": 0.0,
+            "n2": 0.5,
+            "is_air": false,
+            "name": "EAN50",
+            "mod_m_ppo2_1_4": 18.0,
+            "mod_m_ppo2_1_6": 22.0
+          },
+          "cylinder_index": null
+        }
+      ],
+      "sample_count": 8,
+      "samples": [
+        {
+          "time_s": 0.0,
+          "depth_m": 0.0,
+          "temp_c": 18.0,
+          "ndl_s": null,
+          "tts_s": null,
+          "in_deco": false,
+          "stop_depth_m": null,
+          "stop_time_s": null,
+          "cns": null,
+          "pressure_bar": null
+        },
+        {
+          "time_s": 60.0,
+          "depth_m": 18.0,
+          "temp_c": null,
+          "ndl_s": null,
+          "tts_s": null,
+          "in_deco": false,
+          "stop_depth_m": null,
+          "stop_time_s": null,
+          "cns": null,
+          "pressure_bar": null
+        },
+        {
+          "time_s": 120.0,
+          "depth_m": 38.0,
+          "temp_c": 12.0,
+          "ndl_s": null,
+          "tts_s": null,
+          "in_deco": false,
+          "stop_depth_m": null,
+          "stop_time_s": null,
+          "cns": null,
+          "pressure_bar": null
+        },
+        {
+          "time_s": 240.0,
+          "depth_m": 37.5,
+          "temp_c": null,
+          "ndl_s": null,
+          "tts_s": null,
+          "in_deco": true,
+          "stop_depth_m": 6.0,
+          "stop_time_s": 180.0,
+          "cns": null,
+          "pressure_bar": null
+        },
+        {
+          "time_s": 900.0,
+          "depth_m": 20.0,
+          "temp_c": null,
+          "ndl_s": null,
+          "tts_s": null,
+          "in_deco": true,
+          "stop_depth_m": 6.0,
+          "stop_time_s": 180.0,
+          "cns": null,
+          "pressure_bar": null
+        },
+        {
+          "time_s": 1320.0,
+          "depth_m": 9.0,
+          "temp_c": null,
+          "ndl_s": null,
+          "tts_s": null,
+          "in_deco": true,
+          "stop_depth_m": 6.0,
+          "stop_time_s": 180.0,
+          "cns": null,
+          "pressure_bar": null
+        },
+        {
+          "time_s": 1680.0,
+          "depth_m": 3.0,
+          "temp_c": null,
+          "ndl_s": null,
+          "tts_s": null,
+          "in_deco": false,
+          "stop_depth_m": null,
+          "stop_time_s": null,
+          "cns": null,
+          "pressure_bar": null
+        },
+        {
+          "time_s": 1800.0,
+          "depth_m": 0.0,
+          "temp_c": 17.0,
+          "ndl_s": null,
+          "tts_s": null,
+          "in_deco": false,
+          "stop_depth_m": null,
+          "stop_time_s": null,
+          "cns": null,
+          "pressure_bar": null
+        }
+      ],
+      "derived": {
+        "computed_max_depth_m": 38.0,
+        "computed_duration_s": 1800.0,
+        "computed_mean_depth_m": 19.4,
+        "temperature_range_c": [
+          12.0,
+          18.0
+        ],
+        "deco_spans": [
+          {
+            "start_s": 240.0,
+            "end_s": 1680.0,
+            "duration_s": 1440.0
+          }
+        ],
+        "deco_time_s": 360.0,
+        "deco_time_s_tolerance_0": null,
+        "gradient_factors": null,
+        "gas_used_l": 1540.0,
+        "gas_used_by_cylinder": [
+          {
+            "label": "Air",
+            "litres": 1540.0
+          }
+        ],
+        "gas_at": [
+          {
+            "time_s": -1.0,
+            "mix": null
+          },
+          {
+            "time_s": 0.0,
+            "mix": "Air"
+          },
+          {
+            "time_s": 1.0,
+            "mix": "Air"
+          },
+          {
+            "time_s": 450.0,
+            "mix": "Air"
+          },
+          {
+            "time_s": 900.0,
+            "mix": "Air"
+          },
+          {
+            "time_s": 1319.0,
+            "mix": "Air"
+          },
+          {
+            "time_s": 1320.0,
+            "mix": "EAN50"
+          },
+          {
+            "time_s": 1321.0,
+            "mix": "EAN50"
+          },
+          {
+            "time_s": 1350.0,
+            "mix": "EAN50"
+          },
+          {
+            "time_s": 1800.0,
+            "mix": "EAN50"
+          }
+        ],
+        "title": "#42 · 2026-05-04",
+        "slate": {
+          "max_depth_ceil_m": 38,
+          "duration_ceil_min": 30,
+          "duration_formatted": [
+            "30",
+            "min"
+          ],
+          "duration_clock": "30:00"
+        }
+      }
+    }
+  ]
+}
