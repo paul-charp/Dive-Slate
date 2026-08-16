@@ -190,7 +190,7 @@ class SlateRendererTest {
             "temp" to ("TEMP" to "15"),
             "sac" to ("SAC" to "15.4"),
             "cns" to ("CNS" to "31"),
-            "gas" to ("GAS" to "Air/O2"),
+            "gas" to ("GASES" to "Air, O2"),
         )
 
         for ((key, pair) in expected) {

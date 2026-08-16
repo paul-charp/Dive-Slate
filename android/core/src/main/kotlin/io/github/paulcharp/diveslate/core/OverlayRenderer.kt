@@ -109,9 +109,13 @@ private val STAT_BUILDERS: Map<String, (Dive) -> SlateStat?> = mapOf(
         d.sacLitresPerMin?.let { SlateStat("SAC", String.format(Locale.ENGLISH, "%.1f", it), "L/min") }
     },
     "cns" to { d -> d.cns?.let { SlateStat("CNS", (it * 100).roundToInt().toString(), "%") } },
+    // "Gases", comma-separated. Diverges from the Python, which labels this
+    // "Gas" and joins with "/" — a slash reads as a ratio next to figures like
+    // GF 70/80, and Tx18/45 already contains one, so "Tx18/45/O2" parses wrong
+    // at a glance. Do not "restore" parity here.
     "gas" to { d ->
         if (d.gasSwitches.isEmpty()) null
-        else SlateStat("Gas", d.gasSwitches.map { it.gas.name }.distinct().joinToString("/"), "")
+        else SlateStat("Gases", d.gasSwitches.map { it.gas.name }.distinct().joinToString(", "), "")
     },
 )
 

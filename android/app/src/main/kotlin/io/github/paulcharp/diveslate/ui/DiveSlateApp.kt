@@ -54,6 +54,7 @@ import io.github.paulcharp.diveslate.core.Dive
 import io.github.paulcharp.diveslate.core.DiveLog
 import io.github.paulcharp.diveslate.core.OverlayOptions
 import io.github.paulcharp.diveslate.core.SLATE_THEMES
+import io.github.paulcharp.diveslate.core.Slate
 import io.github.paulcharp.diveslate.core.SlateLayout
 import io.github.paulcharp.diveslate.core.SlateTheme
 import io.github.paulcharp.diveslate.core.renderOverlay
@@ -102,7 +103,7 @@ private val STAT_LABELS = listOf(
     "temp" to "Temp",
     "sac" to "SAC",
     "cns" to "CNS",
-    "gas" to "Mix",
+    "gas" to "Gases",
 )
 
 @Composable
@@ -345,12 +346,25 @@ private fun Editor(
     }
 }
 
+/** How much of the preview's width the slate occupies. */
+private const val SLATE_FRACTION = 0.86f
+
+/** Backdrop kept around the slate, as a multiple of its own height. */
+private const val PREVIEW_MARGIN = 1.28f
+
 @Composable
-private fun Preview(slate: io.github.paulcharp.diveslate.core.Slate?, showBackdrop: Boolean) {
-    // A 9:16 frame, because that is what a story is. Previewing a slate on a
-    // shape it will never occupy says nothing about the composition.
+private fun Preview(slate: Slate?, showBackdrop: Boolean) {
+    // Sized from the slate rather than to a 9:16 story frame. The slate is the
+    // deliverable — the backdrop is only there to judge legibility against —
+    // and a full story frame spent most of its height showing empty gradient
+    // that is not part of what gets exported.
+    val ratio = slate?.let {
+        val drawnHeight = SLATE_FRACTION * (it.height / it.width)
+        (1f / (drawnHeight * PREVIEW_MARGIN)).coerceIn(0.7f, 2.6f)
+    } ?: (4f / 3f)
+
     Box(
-        Modifier.fillMaxWidth().aspectRatio(9f / 16f).clip(RoundedCornerShape(14.dp)),
+        Modifier.fillMaxWidth().aspectRatio(ratio).clip(RoundedCornerShape(14.dp)),
     ) {
         Canvas(Modifier.fillMaxSize()) {
             if (showBackdrop) {
@@ -362,11 +376,10 @@ private fun Preview(slate: io.github.paulcharp.diveslate.core.Slate?, showBackdr
             }
             val current = slate ?: return@Canvas
 
-            // Placed as the export places it: 86% of frame width, low left.
-            val target = size.width * 0.86f
+            val target = size.width * SLATE_FRACTION
             val factor = target / current.width
             val left = (size.width - target) / 2f
-            val top = size.height - current.height * factor - size.height * 0.06f
+            val top = (size.height - current.height * factor) / 2f
 
             translate(left, top) {
                 scale(scaleX = factor, scaleY = factor, pivot = Offset.Zero) {
