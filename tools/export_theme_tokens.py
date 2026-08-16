@@ -262,7 +262,13 @@ def contiguous_runs(hues: list[int], step: int) -> list[list[int]]:
     return runs
 
 
-def main() -> int:
+def build_payload() -> dict[str, Any]:
+    """Everything written to ``themes.json``, kept separate from writing it.
+
+    ``tests/test_conformance.py`` calls this to re-derive the fixture and check
+    it still matches, so the generated file cannot drift away from the code that
+    generated it without a test going red.
+    """
     sweep = sweep_hues()
     themes = {name: theme_json(t) for name, t in sorted(THEMES.items())}
 
@@ -308,13 +314,18 @@ def main() -> int:
         # What the hue control may actually offer.
         "slider_hues": slider,
     }
+    return payload
+
+
+def main() -> int:
+    payload = build_payload()
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     text = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
     OUT.write_text(text, encoding="utf-8", newline="\n")
 
     print(f"themes -> {OUT.relative_to(ROOT)}  ({len(text):,} bytes)")
-    for mode, rows in sweep.items():
+    for mode, rows in payload["hue_sweep"].items():
         entry = payload["slider_hues"][mode]
         bands = ", ".join(f"{lo}-{hi}°" for lo, hi in entry["bands"]) or "none"
         print(
