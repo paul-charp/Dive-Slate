@@ -6,6 +6,12 @@
 *.jpg binary
 *.ico binary
 *.pdf binary
+# The Gradle wrapper jar is committed by convention; LF normalisation would
+# corrupt it.
+*.jar binary
+
+# Windows batch files need CRLF, so the repo-wide eol=lf must not reach them.
+*.bat text eol=crlf
 
 # Dive logs and SVG are text, but fixtures must stay byte-stable for tests.
 *.ssrf text eol=lf

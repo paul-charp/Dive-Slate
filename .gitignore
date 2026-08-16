@@ -38,3 +38,11 @@ venv/
 /out/
 *.out.svg
 *.out.png
+
+# Gradle / Kotlin. The wrapper itself is committed; its caches and outputs
+# are not.
+.gradle/
+build/
+local.properties
+*.iml
+.kotlin/
