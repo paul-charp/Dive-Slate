@@ -7,7 +7,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,7 +18,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -166,7 +166,9 @@ private fun Editor(
     val log = state.log
     var diveIndex by remember { mutableIntStateOf(0) }
     var themeIndex by remember { mutableIntStateOf(0) }
-    var tall by remember { mutableStateOf(true) }
+    // Wide by default: it suits a feed post or the corner of a video, which is
+    // the common case. Tall is the deliberate choice for a full-height story.
+    var tall by remember { mutableStateOf(false) }
     var showBackdrop by remember { mutableStateOf(true) }
     var opacity by remember { mutableFloatStateOf(SLATE_THEMES[0].scrimAlphaNominal) }
 
@@ -375,21 +377,23 @@ private fun Preview(slate: io.github.paulcharp.diveslate.core.Slate?, showBackdr
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun PaletteRow(
     themes: List<SlateTheme>,
     selected: SlateTheme,
     onPick: (SlateTheme) -> Unit,
 ) {
-    LazyRow(
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
-        contentPadding = PaddingValues(vertical = 2.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        items(themes.size) { index ->
+        themes.forEach { candidate ->
             PaletteSwatch(
-                theme = themes[index],
-                selected = themes[index].name == selected.name,
-                onClick = { onPick(themes[index]) },
+                theme = candidate,
+                selected = candidate.name == selected.name,
+                onClick = { onPick(candidate) },
             )
         }
     }
@@ -450,13 +454,22 @@ private fun Toggle(label: String, checked: Boolean, onChange: (Boolean) -> Unit)
     )
 }
 
+/**
+ * Chips that wrap rather than scroll.
+ *
+ * A horizontally scrolling row hid its own tail: with ten figures on offer the
+ * last few sat off the right edge with nothing indicating they existed. An
+ * option you cannot see is an option you do not have.
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ChipRow(content: @Composable () -> Unit) {
-    LazyRow(
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        contentPadding = PaddingValues(vertical = 2.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        item { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { content() } }
+        content()
     }
 }
 

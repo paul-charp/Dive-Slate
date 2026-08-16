@@ -171,6 +171,53 @@ class SlateRendererTest {
         assertTrue(labels.none { it == "GF" }, "a dive with no model string must not show GFs")
     }
 
+    /**
+     * Every stat key the UI offers must actually render.
+     *
+     * The picker lists all of them, so a key that builds nothing for a dive
+     * that plainly recorded the figure would look like a broken control rather
+     * than a missing measurement.
+     */
+    @Test
+    fun `every offered stat renders for a dive that recorded it`() {
+        val expected = mapOf(
+            "depth" to ("MAX DEPTH" to "45"),
+            "time" to ("RUNTIME" to "1:05"),
+            "deco" to ("DECO" to "24"),
+            "gf" to ("GF" to "70/80"),
+            "used" to ("GAS USED" to "3388"),
+            "avg" to ("AVG DEPTH" to "24"),
+            "temp" to ("TEMP" to "15"),
+            "sac" to ("SAC" to "15.4"),
+            "cns" to ("CNS" to "31"),
+            "gas" to ("GAS" to "Air/O2"),
+        )
+
+        for ((key, pair) in expected) {
+            val (label, value) = pair
+            val texts = renderOverlay(dive, OverlayOptions(stats = listOf(key))).texts().map { it.text }
+            assertTrue(texts.contains(label), "stat '$key' produced no '$label' label; got $texts")
+            assertTrue(texts.contains(value), "stat '$key' produced no '$value' value; got $texts")
+        }
+    }
+
+    /** SAC in particular, since it was the one missing from the picker. */
+    @Test
+    fun `sac renders with one decimal and its unit`() {
+        val texts = renderOverlay(dive, OverlayOptions(stats = listOf("sac"))).texts().map { it.text }
+        assertTrue(texts.contains("SAC"), "no SAC label: $texts")
+        assertTrue(texts.contains("15.4"), "no SAC value: $texts")
+        assertTrue(texts.contains("L/min"), "no SAC unit: $texts")
+    }
+
+    /** The picker offers every key the core knows about, and no others. */
+    @Test
+    fun `no stat key is unrenderable`() {
+        for (key in STAT_KEYS) {
+            renderOverlay(dive, OverlayOptions(stats = listOf(key)))
+        }
+    }
+
     @Test
     fun `an unknown stat key is refused`() {
         try {
