@@ -29,28 +29,57 @@
             </intent-filter>
 
             <!--
-              Receiving a dive log from Subsurface-mobile's export. The MIME
-              type it stamps is not guaranteed, so several are claimed and the
-              content is sniffed afterwards — detection is by content, never by
-              extension, and a shared content:// URI often carries no usable
-              filename at all.
+              Receiving a dive log from Subsurface-mobile's export.
+
+              text/* is a wildcard rather than an enumeration of subtypes, and
+              that is the point: an earlier version listed text/xml and
+              text/plain explicitly and Dive Slate simply did not appear in
+              Subsurface's export chooser. The type it stamps is not documented
+              and not guaranteed, so claiming the whole text tree is the only
+              reliable way to be offered. Content is sniffed afterwards —
+              detection is never by extension, and a shared content:// URI
+              frequently carries no usable filename at all.
+
+              These filters mirror Submersion's, which is known to appear in
+              that chooser.
             -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="text/xml" />
+                <data android:mimeType="text/*" />
                 <data android:mimeType="application/xml" />
-                <data android:mimeType="text/plain" />
                 <data android:mimeType="application/octet-stream" />
             </intent-filter>
 
-            <!-- Opening a log from a file manager. -->
+            <!-- An export may hand over several files at once. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/*" />
+                <data android:mimeType="application/xml" />
+                <data android:mimeType="application/octet-stream" />
+            </intent-filter>
+
+            <!--
+              Opening a log from a file manager. The scheme is declared
+              explicitly: a VIEW filter carrying only a mimeType matches no
+              scheme at all on its own.
+
+              content:// only, deliberately. Submersion also claims file://,
+              but under scoped storage this app cannot read one — a file URI
+              carries no grant, and reading /sdcard directly needs a permission
+              we do not hold. Claiming it would mean appearing in a chooser and
+              then failing, which is worse than not appearing. In practice
+              nothing sends file:// anyway: exposing one throws
+              FileUriExposedException on the sender since API 24.
+            -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:mimeType="text/xml" />
-                <data android:mimeType="application/xml" />
+                <data android:scheme="content" android:mimeType="text/*" />
+                <data android:scheme="content" android:mimeType="application/xml" />
+                <data android:scheme="content" android:mimeType="application/octet-stream" />
             </intent-filter>
         </activity>
 

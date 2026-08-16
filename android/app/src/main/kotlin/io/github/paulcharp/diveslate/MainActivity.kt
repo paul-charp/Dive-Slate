@@ -52,17 +52,28 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleIntent(intent: Intent?) {
-        val uri = when (intent?.action) {
-            Intent.ACTION_SEND -> intent.streamExtra()
-            Intent.ACTION_VIEW -> intent.data
-            else -> null
-        } ?: return
-
-        state = try {
-            LoadState.Loaded(readLog(uri))
-        } catch (e: Exception) {
-            LoadState.Failed(describe(e))
+        val uris = when (intent?.action) {
+            Intent.ACTION_SEND -> listOfNotNull(intent.streamExtra())
+            Intent.ACTION_SEND_MULTIPLE -> intent.streamExtras()
+            Intent.ACTION_VIEW -> listOfNotNull(intent.data)
+            else -> emptyList()
         }
+        if (uris.isEmpty()) return
+
+        // Take the first that parses. A multi-file share can include things
+        // that are not dive logs at all, and one unreadable attachment should
+        // not sink the whole handover — but if none of them work, report the
+        // last failure rather than sitting silently on the start screen.
+        var failure: Exception? = null
+        for (uri in uris) {
+            try {
+                state = LoadState.Loaded(readLog(uri))
+                return
+            } catch (e: Exception) {
+                failure = e
+            }
+        }
+        failure?.let { state = LoadState.Failed(describe(it)) }
     }
 
     @Suppress("DEPRECATION")
@@ -72,6 +83,14 @@ class MainActivity : ComponentActivity() {
         } else {
             getParcelableExtra(Intent.EXTRA_STREAM)
         }
+
+    @Suppress("DEPRECATION")
+    private fun Intent.streamExtras(): List<Uri> =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java)
+        } else {
+            getParcelableArrayListExtra(Intent.EXTRA_STREAM)
+        }.orEmpty()
 
     /**
      * Read the shared document immediately and keep our own copy.
