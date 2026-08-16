@@ -1,11 +1,11 @@
 <divelog program='subsurface' version='3'>
 <divesites>
-<site uuid='aa11bb22' name='Le Bananier'/>
-<site uuid='cc33dd44' name='Bubble City'/>
+<site uuid='aa11bb22' name='Sample Wall'/>
+<site uuid='cc33dd44' name='Sample Pinnacle'/>
 </divesites>
 <dives>
-<trip date='2026-03-07' time='11:52:12' location='Marseille'>
-<dive number='87' date='2026-03-07' time='11:52:12' duration='60:30 min' divesiteid='aa11bb22'>
+<trip date='2024-03-07' time='11:52:12' location='Sample Trip'>
+<dive number='87' date='2024-03-07' time='11:52:12' duration='60:30 min' divesiteid='aa11bb22'>
 <divecomputer model='Shearwater Peregrine'>
 <depth max='16.9 m' mean='10.4 m'/>
 <extradata key='Deco model' value='GF 85/85'/>
@@ -15,7 +15,7 @@
 <sample time='3:00 min' depth='4.2 m'/>
 </divecomputer>
 </dive>
-<dive number='88' date='2026-03-07' time='15:09:12' duration='44:10 min' divesiteid='cc33dd44'>
+<dive number='88' date='2024-03-07' time='15:09:12' duration='44:10 min' divesiteid='cc33dd44'>
 <divecomputer model='Shearwater Peregrine'>
 <depth max='22.5 m' mean='13.1 m'/>
 <sample time='0:00 min' depth='0.0 m' temp='15.0 C'/>
@@ -25,7 +25,7 @@
 </divecomputer>
 </dive>
 </trip>
-<dive number='89' date='2026-04-02' time='09:30:00' duration='38:00 min' divesiteid='aa11bb22'>
+<dive number='89' date='2024-04-02' time='09:30:00' duration='38:00 min' divesiteid='aa11bb22'>
 <divecomputer model='Shearwater Peregrine'>
 <depth max='11.2 m' mean='7.0 m'/>
 <sample time='0:00 min' depth='0.0 m' temp='16.0 C'/>

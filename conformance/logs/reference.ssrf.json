@@ -4,15 +4,15 @@
   "program": "subsurface",
   "dive_count": 1,
   "sites": {
-    "176acbd6": "Le Bananier Alice Robert"
+    "176acbd6": "Sample Reef"
   },
   "dives": [
     {
       "number": 117,
-      "when": "2026-08-15T08:29:28",
-      "site": "Le Bananier Alice Robert",
+      "when": "2024-06-01T08:29:28",
+      "site": "Sample Reef",
       "buddy": "Dive Buddy",
-      "notes": "Premiere plongée en Bi12 et Wing Bi DirZone.\n60min runtime max\n\nDeco s40 02. 90bar fuite robinet\n\nLest : 2x1kg belt : Ok, a affiner.\n\nDesncte le long du mouilage, visa bof puis soudain l'epave apparait visi de dingue. \nBeaucoup de grosses langoustes au fond.\n\nAvec Henri Beneditini et le mec de subaqua",
+      "notes": "Synthetic notes for a fixture dive.",
       "rating": 5,
       "duration_s": 3738.0,
       "max_depth_m": 44.4,
@@ -26,7 +26,7 @@
       "computer": "Shearwater Peregrine",
       "deco_model": "GF 70/80",
       "tags": [
-        "Tech Of Plongée"
+        "sample"
       ],
       "cylinders": [
         {
@@ -23362,7 +23362,7 @@
             "mix": "Air"
           }
         ],
-        "title": "#117 · Le Bananier Alice Robert",
+        "title": "#117 · Sample Reef",
         "slate": {
           "max_depth_ceil_m": 45,
           "duration_ceil_min": 65,

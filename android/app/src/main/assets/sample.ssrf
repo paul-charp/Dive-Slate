@@ -4,23 +4,13 @@
   <autogroup state='1' />
 </settings>
 <divesites>
-<site uuid='176acbd6' name='Le Bananier Alice Robert'>
+<site uuid='176acbd6' name='Sample Reef'>
 </site>
 </divesites>
 <dives>
-<dive number='117' rating='5' sac='15.425 l/min' otu='62' cns='31%' tags='Tech Of Plongée' divesiteid='176acbd6' date='2026-08-15' time='08:29:28' duration='62:18 min'>
+<dive number='117' rating='5' sac='15.425 l/min' otu='62' cns='31%' tags='sample' divesiteid='176acbd6' date='2024-06-01' time='08:29:28' duration='62:18 min'>
   <buddy>Dive Buddy</buddy>
-  <notes>Premiere plongée en Bi12 et Wing Bi DirZone.
-60min runtime max
-
-Deco s40 02. 90bar fuite robinet
-
-Lest : 2x1kg belt : Ok, a affiner.
-
-Desncte le long du mouilage, visa bof puis soudain l'epave apparait visi de dingue. 
-Beaucoup de grosses langoustes au fond.
-
-Avec Henri Beneditini et le mec de subaqua</notes>
+  <notes>Synthetic notes for a fixture dive.</notes>
   <cylinder size='5.547 l' workpressure='206.843 bar' description='AL40' o2='99.0%' start='90.0 bar' end='20.0 bar' depth='6.087 m' />
   <cylinder size='24.0 l' workpressure='232.0 bar' description='D12 232 bar' start='200.0 bar' end='75.0 bar' depth='65.497 m' />
   <weightsystem weight='2.0 kg' description='weight' />

@@ -4,14 +4,14 @@
   "program": "subsurface",
   "dive_count": 3,
   "sites": {
-    "aa11bb22": "Le Bananier",
-    "cc33dd44": "Bubble City"
+    "aa11bb22": "Sample Wall",
+    "cc33dd44": "Sample Pinnacle"
   },
   "dives": [
     {
       "number": 87,
-      "when": "2026-03-07T11:52:12",
-      "site": "Le Bananier",
+      "when": "2024-03-07T11:52:12",
+      "site": "Sample Wall",
       "buddy": null,
       "notes": null,
       "rating": null,
@@ -119,7 +119,7 @@
             "mix": null
           }
         ],
-        "title": "#87 · Le Bananier",
+        "title": "#87 · Sample Wall",
         "slate": {
           "max_depth_ceil_m": 17,
           "duration_ceil_min": 3,
@@ -133,8 +133,8 @@
     },
     {
       "number": 88,
-      "when": "2026-03-07T15:09:12",
-      "site": "Bubble City",
+      "when": "2024-03-07T15:09:12",
+      "site": "Sample Pinnacle",
       "buddy": null,
       "notes": null,
       "rating": null,
@@ -239,7 +239,7 @@
             "mix": null
           }
         ],
-        "title": "#88 · Bubble City",
+        "title": "#88 · Sample Pinnacle",
         "slate": {
           "max_depth_ceil_m": 23,
           "duration_ceil_min": 3,
@@ -253,8 +253,8 @@
     },
     {
       "number": 89,
-      "when": "2026-04-02T09:30:00",
-      "site": "Le Bananier",
+      "when": "2024-04-02T09:30:00",
+      "site": "Sample Wall",
       "buddy": null,
       "notes": null,
       "rating": null,
@@ -359,7 +359,7 @@
             "mix": null
           }
         ],
-        "title": "#89 · Le Bananier",
+        "title": "#89 · Sample Wall",
         "slate": {
           "max_depth_ceil_m": 12,
           "duration_ceil_min": 3,

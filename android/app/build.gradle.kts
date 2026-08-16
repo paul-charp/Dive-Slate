@@ -49,8 +49,8 @@ android {
         // floor for a phone that also runs Subsurface-mobile and Instagram.
         minSdk = 29
         targetSdk = 36
-        versionCode = 9
-        versionName = "0.2.2"
+        versionCode = 10
+        versionName = "0.2.3"
     }
 
     signingConfigs {

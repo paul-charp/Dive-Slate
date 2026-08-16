@@ -114,14 +114,14 @@ class TestTrips:
 
     def test_trip_dives_keep_their_own_metadata(self, trips_log: object) -> None:
         first = trips_log.dives[0]  # type: ignore[attr-defined]
-        assert first.site == "Le Bananier"
+        assert first.site == "Sample Wall"
         assert first.computed_max_depth_m == pytest.approx(16.9)
         assert first.gradient_factors == (85, 85)
 
     def test_ungrouped_dive_is_not_lost(self, trips_log: object) -> None:
         last = trips_log.dives[-1]  # type: ignore[attr-defined]
         assert last.number == 89
-        assert last.site == "Le Bananier"
+        assert last.site == "Sample Wall"
 
 
 class TestErrors:
