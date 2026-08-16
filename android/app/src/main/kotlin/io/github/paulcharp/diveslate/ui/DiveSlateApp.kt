@@ -22,12 +22,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
@@ -68,7 +70,12 @@ import io.github.paulcharp.diveslate.core.SLATE_THEMES
 import io.github.paulcharp.diveslate.core.Slate
 import io.github.paulcharp.diveslate.core.SlateLayout
 import io.github.paulcharp.diveslate.core.SlateTheme
+import io.github.paulcharp.diveslate.core.ceilMetres
+import io.github.paulcharp.diveslate.core.formatMinutes
 import io.github.paulcharp.diveslate.core.renderOverlay
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 /**
  * Something to tell the user once.
@@ -155,9 +162,17 @@ fun DiveSlateApp(
             ActivityResultContracts.OpenDocument()
         ) { uri -> uri?.let(onOpenUri) }
 
-        // The system back gesture should return to the start screen rather than
-        // leaving the app, whenever there is something to go back from.
-        BackHandler(enabled = state !is LoadState.Empty) { onBack() }
+        val log = (state as? LoadState.Loaded)?.log
+        // A single-dive log has no list worth showing, so it opens straight
+        // into the editor and back from there leaves entirely.
+        val single = log != null && log.size == 1
+        var picked by remember(log) { mutableStateOf<Int?>(null) }
+
+        // Back steps out one screen at a time — editor to list, list to start —
+        // rather than leaving the app from wherever you happen to be.
+        BackHandler(enabled = state !is LoadState.Empty) {
+            if (picked != null && !single) picked = null else onBack()
+        }
 
         Box(Modifier.fillMaxSize().background(Surface).safeDrawingPadding()) {
             when (state) {
@@ -165,7 +180,20 @@ fun DiveSlateApp(
                 is LoadState.Failed -> Problem(state.message, onBack) {
                     picker.launch(PICKER_TYPES)
                 }
-                is LoadState.Loaded -> Editor(state, onBack, onExport, onSaveToGallery)
+                is LoadState.Loaded -> {
+                    val index = picked ?: if (single) 0 else null
+                    if (index == null) {
+                        DiveList(state.log, onBack = onBack, onPick = { picked = it })
+                    } else {
+                        Editor(
+                            state = state,
+                            diveIndex = index,
+                            onBack = { if (single) onBack() else picked = null },
+                            onExport = onExport,
+                            onSaveToGallery = onSaveToGallery,
+                        )
+                    }
+                }
             }
 
             SnackbarHost(
@@ -238,15 +266,96 @@ private fun Problem(message: String, onBack: () -> Unit, onPickFile: () -> Unit)
     }
 }
 
+/**
+ * The whole log as a scrolling list, newest first.
+ *
+ * A full page rather than a row of chips: a real logbook is hundreds of dives,
+ * and a horizontally scrolling picker hides all but the first few with nothing
+ * to say the rest exist. Newest first because the dive you want to post is
+ * almost always the one you just did.
+ */
+@Composable
+private fun DiveList(log: DiveLog, onBack: () -> Unit, onPick: (Int) -> Unit) {
+    // Indices, not dives: the editor addresses dives by their position in the
+    // log, and sorting a copy would quietly renumber them.
+    val order = remember(log) {
+        log.dives.indices.sortedWith(
+            compareByDescending<Int> { log[it].whenLogged ?: LocalDateTime.MIN }
+                .thenByDescending { log[it].number ?: 0 }
+        )
+    }
+
+    Column(Modifier.fillMaxSize()) {
+        Row(
+            Modifier.padding(start = 16.dp, top = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(onClick = onBack) { Text("← Back") }
+        }
+        Text(
+            if (log.size == 1) "1 dive" else "${log.size} dives",
+            color = OnSurface,
+            fontSize = 22.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(start = 16.dp, bottom = 10.dp),
+        )
+
+        LazyColumn(Modifier.fillMaxSize()) {
+            items(order.size) { position ->
+                val index = order[position]
+                DiveRow(log[index]) { onPick(index) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DiveRow(dive: Dive, onClick: () -> Unit) {
+    val depth = ceilMetres(dive.computedMaxDepthMetres)
+    val (runtime, unit) = formatMinutes(dive.computedDurationSeconds)
+
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+    ) {
+        Text(
+            dive.site?.takeIf { it.isNotBlank() } ?: dive.title,
+            color = OnSurface,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+        )
+        Row {
+            dive.whenLogged?.let {
+                Text(it.format(LIST_DATE), color = Muted, fontSize = 13.sp)
+                Text("   ", fontSize = 13.sp)
+            }
+            // Depth and runtime: the two numbers that identify a dive at a
+            // glance, and the same two the slate leads with.
+            Text("$depth m · $runtime $unit".trim(), color = Muted, fontSize = 13.sp)
+            // Only when a site named the row. Without one the title already
+            // falls back to "#9 · 2026-08-16", and repeating the number under
+            // it says nothing.
+            if (!dive.site.isNullOrBlank()) {
+                dive.number?.let { Text("   #$it", color = Muted, fontSize = 13.sp) }
+            }
+        }
+    }
+    HorizontalDivider(color = Color(0xFF1C2429))
+}
+
+private val LIST_DATE: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.ENGLISH)
+
 @Composable
 private fun Editor(
     state: LoadState.Loaded,
+    diveIndex: Int,
     onBack: () -> Unit,
     onExport: (SlateExport, Pair<Long, Long>) -> Unit,
     onSaveToGallery: (SlateExport, String) -> Unit,
 ) {
     val log = state.log
-    var diveIndex by remember { mutableIntStateOf(0) }
     var themeIndex by remember { mutableIntStateOf(0) }
     var tall by remember { mutableStateOf(false) }
     var showBackdrop by remember { mutableStateOf(true) }
@@ -309,18 +418,6 @@ private fun Editor(
         }
 
         Text(dive.title, color = OnSurface, fontSize = 19.sp, fontWeight = FontWeight.Bold)
-
-        if (log.size > 1) {
-            ChipRow {
-                log.dives.forEachIndexed { index, candidate ->
-                    FilterChip(
-                        selected = index == diveIndex,
-                        onClick = { diveIndex = index },
-                        label = { Text(candidate.title, fontSize = 12.sp) },
-                    )
-                }
-            }
-        }
 
         Preview(slate = slate, showBackdrop = showBackdrop)
 
