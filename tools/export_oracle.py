@@ -23,14 +23,15 @@ from __future__ import annotations
 
 import json
 import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from diveslate.core import units  # noqa: E402
-from diveslate.core.models import (  # noqa: E402
+from diveslate.core import units
+from diveslate.core.models import (
     Cylinder,
     Dive,
     DiveLog,
@@ -38,7 +39,7 @@ from diveslate.core.models import (  # noqa: E402
     GasSwitch,
     Sample,
 )
-from diveslate.parsers import detect  # noqa: E402
+from diveslate.parsers import detect
 
 DATA = ROOT / "tests" / "data"
 OUT = ROOT / "conformance"
@@ -51,7 +52,7 @@ PLACES = 6
 SCHEMA = 1
 
 
-def num(value: float | int | None) -> float | None:
+def num(value: float | None) -> float | None:
     """Round for serialisation, collapsing -0.0 so it compares equal to 0.0."""
     if value is None:
         return None
@@ -133,7 +134,9 @@ def derived_json(dive: Dive) -> dict[str, Any]:
         "computed_max_depth_m": num(max_depth),
         "computed_duration_s": num(duration),
         "computed_mean_depth_m": num(dive.computed_mean_depth_m),
-        "temperature_range_c": None if temps is None else [num(temps[0]), num(temps[1])],
+        "temperature_range_c": None
+        if temps is None
+        else [num(temps[0]), num(temps[1])],
         "deco_spans": [
             {
                 "start_s": num(span.start_s),
@@ -232,15 +235,44 @@ def probe(fn: Callable[[str], float], raw: str) -> dict[str, Any]:
 UNIT_CASES: dict[str, tuple[Callable[[str], float], tuple[str, ...]]] = {
     "parse_depth_m": (
         units.parse_depth_m,
-        ("44.4 m", "44.4m", "44.4", "0", "-1.2", "+3", ".5", "30 metres",
-         "100 ft", "100ft", "100 feet", "1 foot", "30 fathoms", "", "abc"),
+        (
+            "44.4 m",
+            "44.4m",
+            "44.4",
+            "0",
+            "-1.2",
+            "+3",
+            ".5",
+            "30 metres",
+            "100 ft",
+            "100ft",
+            "100 feet",
+            "1 foot",
+            "30 fathoms",
+            "",
+            "abc",
+        ),
     ),
     "parse_duration_s": (
         units.parse_duration_s,
         # The colon form is mm:ss, so '44:20 min' is 44 min 20 s, not 44.2 min —
         # the trailing label names the leading field and is not a scale factor.
-        ("62:18 min", "62:18", "1:02:03", "0:00", "44:20 min", "90 s", "90 sec",
-         "3 min", "45", "1.5 h", "2 hours", "1:2:3:4", "5 fortnights", ""),
+        (
+            "62:18 min",
+            "62:18",
+            "1:02:03",
+            "0:00",
+            "44:20 min",
+            "90 s",
+            "90 sec",
+            "3 min",
+            "45",
+            "1.5 h",
+            "2 hours",
+            "1:2:3:4",
+            "5 fortnights",
+            "",
+        ),
     ),
     "parse_pressure_bar": (
         units.parse_pressure_bar,
@@ -248,8 +280,18 @@ UNIT_CASES: dict[str, tuple[Callable[[str], float], tuple[str, ...]]] = {
     ),
     "parse_temperature_c": (
         units.parse_temperature_c,
-        ("28 C", "28", "0", "-2.5", "82.4 F", "301.15 K", "28 °C",
-         "28 celsius", "28 R", ""),
+        (
+            "28 C",
+            "28",
+            "0",
+            "-2.5",
+            "82.4 F",
+            "301.15 K",
+            "28 °C",
+            "28 celsius",
+            "28 R",
+            "",
+        ),
     ),
     "parse_volume_l": (
         units.parse_volume_l,
@@ -263,8 +305,20 @@ UNIT_CASES: dict[str, tuple[Callable[[str], float], tuple[str, ...]]] = {
 
 #: Seconds chosen around the boundaries where the round-up rule bites: an
 #: exactly-round hour must stay 60 min, and 64:20 must read as 65.
-ROUNDING_SECONDS = (0.0, 1.0, 59.0, 60.0, 61.0, 600.0, 3540.0, 3599.0, 3600.0,
-                    3601.0, 3860.0, 7200.0)
+ROUNDING_SECONDS = (
+    0.0,
+    1.0,
+    59.0,
+    60.0,
+    61.0,
+    600.0,
+    3540.0,
+    3599.0,
+    3600.0,
+    3601.0,
+    3860.0,
+    7200.0,
+)
 
 ROUNDING_METRES = (0.0, 0.1, 1.0, 29.999999, 30.0, 44.0, 44.4, 45.0)
 
@@ -322,8 +376,15 @@ def specs_json() -> dict[str, Any]:
         "gas_names": [
             {"o2": num(o2), "he": num(he), "name": GasMix(o2=o2, he=he).name}
             for o2, he in (
-                (0.21, 0.0), (0.209, 0.0), (0.32, 0.0), (0.36, 0.0),
-                (1.0, 0.0), (0.99, 0.0), (0.18, 0.45), (0.1, 0.7), (0.5, 0.2),
+                (0.21, 0.0),
+                (0.209, 0.0),
+                (0.32, 0.0),
+                (0.36, 0.0),
+                (1.0, 0.0),
+                (0.99, 0.0),
+                (0.18, 0.45),
+                (0.1, 0.7),
+                (0.5, 0.2),
             )
         ],
     }
@@ -345,8 +406,10 @@ def main() -> int:
     print(f"oracle -> {OUT.relative_to(ROOT)}")
     for path in logs:
         log = detect.parse_file(path)
-        write(OUT / "logs" / f"{path.stem}.{path.suffix.lstrip('.')}.json",
-              log_json(log, path.name))
+        write(
+            OUT / "logs" / f"{path.stem}.{path.suffix.lstrip('.')}.json",
+            log_json(log, path.name),
+        )
 
     write(OUT / "specs.json", specs_json())
     return 0

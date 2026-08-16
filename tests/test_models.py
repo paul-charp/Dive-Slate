@@ -182,8 +182,7 @@ class TestDecoTime:
         """Surfacing in deco after an earlier hang still reports that hang."""
         samples = [Sample(0, 40.0, in_deco=True, stop_depth_m=6.0)]
         samples += [
-            Sample(m * 60.0, 6.0, in_deco=True, stop_depth_m=6.0)
-            for m in range(1, 11)
+            Sample(m * 60.0, 6.0, in_deco=True, stop_depth_m=6.0) for m in range(1, 11)
         ]
         samples.append(Sample(660.0, 3.0))
         # Second obligation, never served: straight back down and the log ends.
