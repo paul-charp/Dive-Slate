@@ -40,8 +40,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.text.font.FontWeight
@@ -72,16 +73,28 @@ fun LoadState.withMessage(message: String): LoadState = when (this) {
 }
 
 /**
- * The placeholder backdrop, and the story background when no media is chosen.
+ * The story background sent to Instagram when no media is chosen.
  *
- * Bright cyan over near-black, because that is what actually breaks an overlay:
- * blown-out surface light and deep water, usually in the same frame. A
- * checkerboard is honest about alpha but says nothing about legibility. These
- * are the same two values handed to Instagram as the story gradient, so with
- * the toggle on the preview is what ships rather than a mock-up.
+ * Bright cyan over near-black, mirroring what actually sits behind a dive
+ * overlay: blown-out surface light and deep water. Still exported, but no
+ * longer what the preview shows — see [drawCheckerboard].
  */
 private const val BACKDROP_TOP = 0xFF2BA3C7L
 private const val BACKDROP_BOTTOM = 0xFF04070AL
+
+/**
+ * Checkerboard greys.
+ *
+ * Deliberately light. The convention would be to read this as "just the
+ * transparency indicator", but it doubles as the adversarial case for the dark
+ * palettes: a white-ish backdrop is exactly the worst backdrop their scrim
+ * floors were computed against, so a slate that holds up here holds up
+ * anywhere. It answers a different question from the gradient, which showed
+ * how the slate sits on plausible footage.
+ */
+private const val CHECKER_LIGHT = 0xFFE7EAEC
+private const val CHECKER_DARK = 0xFFAFB6BA
+private val CHECKER_CELL = 22.dp
 
 private val Surface = Color(0xFF0B1013)
 private val OnSurface = Color(0xFFE8EAEC)
@@ -322,7 +335,7 @@ private fun Editor(
 
         Row(verticalAlignment = Alignment.CenterVertically) {
             Switch(checked = showBackdrop, onCheckedChange = { showBackdrop = it })
-            Text("  Placeholder backdrop", color = Muted, fontSize = 14.sp)
+            Text("  Checkerboard backdrop", color = Muted, fontSize = 14.sp)
         }
 
         // ---- export ---------------------------------------------------------
@@ -367,13 +380,7 @@ private fun Preview(slate: Slate?, showBackdrop: Boolean) {
         Modifier.fillMaxWidth().aspectRatio(ratio).clip(RoundedCornerShape(14.dp)),
     ) {
         Canvas(Modifier.fillMaxSize()) {
-            if (showBackdrop) {
-                drawRect(
-                    Brush.verticalGradient(
-                        listOf(Color(BACKDROP_TOP.toInt()), Color(BACKDROP_BOTTOM.toInt()))
-                    )
-                )
-            }
+            if (showBackdrop) drawCheckerboard()
             val current = slate ?: return@Canvas
 
             val target = size.width * SLATE_FRACTION
@@ -387,6 +394,42 @@ private fun Preview(slate: Slate?, showBackdrop: Boolean) {
                 }
             }
         }
+    }
+}
+
+/**
+ * Fill the preview with an alpha checkerboard.
+ *
+ * Painted rather than tiled from a bitmap because the cells need to scale with
+ * the preview, and the whole thing is two colours and a parity test.
+ */
+private fun DrawScope.drawCheckerboard() {
+    drawRect(Color(CHECKER_LIGHT.toInt()))
+
+    val cell = CHECKER_CELL.toPx()
+    var row = 0
+    var y = 0f
+    while (y < size.height) {
+        var column = 0
+        var x = 0f
+        while (x < size.width) {
+            if ((row + column) % 2 == 1) {
+                drawRect(
+                    color = Color(CHECKER_DARK.toInt()),
+                    topLeft = Offset(x, y),
+                    // Clamped so the last cell in each direction is cropped
+                    // rather than painted past the rounded corners.
+                    size = Size(
+                        width = minOf(cell, size.width - x),
+                        height = minOf(cell, size.height - y),
+                    ),
+                )
+            }
+            x += cell
+            column++
+        }
+        y += cell
+        row++
     }
 }
 
