@@ -318,6 +318,6 @@ Colour and type tokens for the rendered slate.
 - `test_overlay.py` (34 tests) — TestHeading, TestSlate, TestScrim, TestStats, TestGas, TestCeiling, TestEnvelope, TestCanvasPlacement, TestOverlayCli, TestOptions, TestGradientFactors
 - `test_raster.py` (7 tests) — TestRasterisation, TestBackendSelection
 - `test_render.py` (31 tests) — TestSvgDocument, TestLayers, TestThemes, TestScalesAndLayout, TestSvgPrimitives, TestRenderOptions
-- `test_subsurface.py` (18 tests) — TestMetadata, TestCarryForward, TestGas, TestDerived, TestErrors
+- `test_subsurface.py` (21 tests) — TestMetadata, TestCarryForward, TestGas, TestDerived, TestTrips, TestErrors
 - `test_uddf.py` (10 tests) — TestUddf
 - `test_units.py` (21 tests) — TestDepth, TestDuration, TestOtherQuantities, TestFormatDuration, TestCeilingRounding

@@ -121,6 +121,14 @@ drift away unnoticed; the Kotlin tests read the same files.
 **When a conformance test fails, fix the Kotlin.** Regenerating to turn a test
 green discards the specification and keeps the bug.
 
+**A green Kotlin run is only meaningful if the task actually ran.** The fixtures
+live outside the Gradle project, so for a while changing them left `core:test`
+reported UP-TO-DATE — the suite whose whole job is noticing when fixtures and
+code disagree was skipping itself precisely when they had just been made to
+disagree. `conformance/` and `tests/data` are declared as test inputs now. If
+that declaration is ever removed, a stale pass looks identical to a real one;
+`--rerun-tasks` is the way to check when a result seems too good.
+
 One lesson worth keeping, because it nearly cost the deco fix: **fixtures
 generated from real logs only cover what real logs happen to contain.** Every
 dive in `tests/data` has a single deco span, so none of them can distinguish a
@@ -186,7 +194,7 @@ sibling split meant the overlay could leave without it.
   contains one.
 - **`minSdk` is 29**, for MediaStore scoped storage.
 
-## Six things that are easy to break
+## Seven things that are easy to break
 
 ### 1. Subsurface samples are sparse
 
@@ -260,6 +268,21 @@ result (1–100, low ≤ high) — a VPM-B dive has no GFs and must not appear t
 them. `gas_used_l` needs size *and* both pressures, and drops a cylinder that
 came back fuller rather than subtracting it. `deco_time_s` returns `None` when
 the ceiling was never reached.
+
+### 7. Subsurface nests dives inside trips
+
+A dive is a child of `<dives>` **or** of a `<trip>` inside it, and one log mixes
+both. Matching `dives/dive` finds only the ungrouped ones, so a logbook where
+every dive belongs to a trip parses perfectly and yields nothing — which
+surfaces as "this log contains no dives" against a file that is plainly full of
+them. Both parsers search at any depth under `<dives>`;
+`tests/data/trips.ssrf` guards it.
+
+This shipped because every fixture was ungrouped: the reference dive was
+exported alone, and dives added by hand in an emulator have no trip. A corpus
+assembled from convenient exports had a shape no real logbook has. Worth
+remembering when adding fixtures — real data covers what real data happens to
+contain, which is the same lesson the synthetic deco profiles teach.
 
 ## Conventions
 
