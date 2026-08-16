@@ -54,6 +54,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -213,12 +214,21 @@ private fun Welcome(onLoadSample: () -> Unit, onPickFile: () -> Unit) {
 @Composable
 private fun Problem(message: String, onBack: () -> Unit, onPickFile: () -> Unit) {
     Column(
-        Modifier.fillMaxSize().padding(28.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(28.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text("That did not load", color = OnSurface, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-        Text(message, color = Muted, fontSize = 15.sp, modifier = Modifier.padding(vertical = 16.dp))
+        // Scrollable and monospaced: this may be a multi-line description of an
+        // intent that arrived in an unexpected shape, and it is the only
+        // diagnostic there is when the handover fails on someone else's phone.
+        Text(
+            message,
+            color = Muted,
+            fontSize = 13.sp,
+            fontFamily = FontFamily.Monospace,
+            modifier = Modifier.padding(vertical = 16.dp),
+        )
         Button(onClick = onPickFile, modifier = Modifier.fillMaxWidth()) {
             Text("Try another file")
         }

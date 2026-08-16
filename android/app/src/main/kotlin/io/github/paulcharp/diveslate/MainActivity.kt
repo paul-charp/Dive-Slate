@@ -31,7 +31,14 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        handleIntent(intent)
+        // Guarded, and before setContent: an unexpected intent must not kill
+        // the activity before there is a screen on which to say so. A share
+        // that launches nothing looks identical to a share that did nothing.
+        runCatching { handleIntent(intent) }.onFailure {
+            state = LoadState.Failed(
+                "Could not open that share: ${it.message ?: it::class.simpleName}"
+            )
+        }
         setContent {
             DiveSlateApp(
                 state = state,
@@ -51,19 +58,40 @@ class MainActivity : ComponentActivity() {
         handleIntent(intent)
     }
 
+    /**
+     * Take a dive log from whatever an incoming intent happens to carry.
+     *
+     * Deliberately exhaustive rather than assuming EXTRA_STREAM. There is no
+     * one way to share a document on Android: the payload may be a stream
+     * extra, the intent's own data URI, a ClipData item, or the file's text
+     * inlined in EXTRA_TEXT. Subsurface's export is not documented and an
+     * earlier version of this method handled only the first of those, which
+     * made picking Dive Slate in the export chooser do nothing at all.
+     *
+     * And nothing here returns quietly. A share that arrives and produces no
+     * visible result is the worst outcome — indistinguishable from a crash,
+     * and impossible to report usefully — so an unusable intent ends on a
+     * screen describing what actually turned up.
+     */
     private fun handleIntent(intent: Intent?) {
-        val uris = when (intent?.action) {
-            Intent.ACTION_SEND -> listOfNotNull(intent.streamExtra())
-            Intent.ACTION_SEND_MULTIPLE -> intent.streamExtras()
-            Intent.ACTION_VIEW -> listOfNotNull(intent.data)
-            else -> emptyList()
+        if (intent == null) return
+        val action = intent.action
+        if (action != Intent.ACTION_SEND &&
+            action != Intent.ACTION_SEND_MULTIPLE &&
+            action != Intent.ACTION_VIEW
+        ) {
+            return // a plain launcher start; there is nothing to open
         }
-        if (uris.isEmpty()) return
 
-        // Take the first that parses. A multi-file share can include things
-        // that are not dive logs at all, and one unreadable attachment should
-        // not sink the whole handover — but if none of them work, report the
-        // last failure rather than sitting silently on the start screen.
+        val uris = buildList {
+            intent.data?.let { add(it) }
+            intent.streamExtra()?.let { add(it) }
+            addAll(intent.streamExtras())
+            intent.clipData?.let { clip ->
+                for (i in 0 until clip.itemCount) clip.getItemAt(i).uri?.let { add(it) }
+            }
+        }.distinct()
+
         var failure: Exception? = null
         for (uri in uris) {
             try {
@@ -73,7 +101,43 @@ class MainActivity : ComponentActivity() {
                 failure = e
             }
         }
-        failure?.let { state = LoadState.Failed(describe(it)) }
+
+        // Some apps inline the document instead of handing over a file.
+        val inlined = intent.getStringExtra(Intent.EXTRA_TEXT)
+            ?: intent.clipData
+                ?.takeIf { it.itemCount > 0 }
+                ?.getItemAt(0)
+                ?.text
+                ?.toString()
+        if (!inlined.isNullOrBlank()) {
+            try {
+                state = LoadState.Loaded(parseText(inlined, source = "shared text"))
+                return
+            } catch (e: Exception) {
+                failure = e
+            }
+        }
+
+        state = LoadState.Failed(failure?.let { describe(it) } ?: describeShare(intent, uris))
+    }
+
+    /**
+     * What arrived, when none of it was usable.
+     *
+     * Verbose on purpose. This text is the only diagnostic available when the
+     * handover fails on someone else's phone against an app whose sharing
+     * behaviour is undocumented.
+     */
+    private fun describeShare(intent: Intent, uris: List<Uri>): String = buildString {
+        append("Nothing readable arrived in that share.\n\n")
+        append("action: ${intent.action ?: "none"}\n")
+        append("type: ${intent.type ?: "none"}\n")
+        append("uris: ${uris.size}\n")
+        append("stream extra: ${if (intent.hasExtra(Intent.EXTRA_STREAM)) "yes" else "no"}\n")
+        append("text extra: ${if (intent.hasExtra(Intent.EXTRA_TEXT)) "yes" else "no"}\n")
+        append("clip items: ${intent.clipData?.itemCount ?: 0}\n")
+        val keys = intent.extras?.keySet()?.joinToString().orEmpty()
+        append("extras: ${keys.ifEmpty { "none" }}")
     }
 
     @Suppress("DEPRECATION")
