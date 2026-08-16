@@ -175,7 +175,27 @@ class MainActivity : ComponentActivity() {
 
         // Detection is by content: a shared URI frequently carries no usable
         // filename, and both formats routinely arrive as plain .xml anyway.
-        val log = parseText(text, hint = name, source = name)
+        val log = try {
+            parseText(text, hint = name, source = name)
+        } catch (e: ParseException) {
+            // Show what actually turned up. "Unrecognised format" on its own is
+            // useless when the file came from another app over a content URI
+            // that may not be what anyone expected — an empty read, an archive,
+            // or a wrapper all look identical from here.
+            throw ParseException(
+                buildString {
+                    append(e.message ?: "unrecognised dive log format")
+                    append("\n\nname: ${name ?: "none"}")
+                    append("\nmime: ${contentResolver.getType(uri) ?: "none"}")
+                    append("\nchars: ${text.length}")
+                    append("\n\nit starts with:\n")
+                    append(
+                        if (text.isBlank()) "(nothing — the file read as empty)"
+                        else text.take(240).replace(' ', '.')
+                    )
+                }
+            )
+        }
 
         // A well-formed log with nothing in it. Subsurface will happily export
         // an empty dive list, and the result parses perfectly — there is simply
