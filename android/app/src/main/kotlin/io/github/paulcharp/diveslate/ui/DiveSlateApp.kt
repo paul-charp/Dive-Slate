@@ -266,6 +266,15 @@ private fun Editor(
             enabled = showScrim,
         )
 
+        // Sits with the slider because the two are read together: the slider
+        // changes the panel's opacity, and this is what makes that opacity
+        // visible. It is also the only control here that changes nothing about
+        // the export.
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Switch(checked = showBackdrop, onCheckedChange = { showBackdrop = it })
+            Text("  Checkerboard backdrop", color = Muted, fontSize = 14.sp)
+        }
+
         // ---- palette --------------------------------------------------------
         // Grouped, because a palette validated against dark footage and one
         // validated against a pale page are not interchangeable, and nothing in
@@ -334,11 +343,6 @@ private fun Editor(
                 color = Muted,
                 fontSize = 12.sp,
             )
-        }
-
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Switch(checked = showBackdrop, onCheckedChange = { showBackdrop = it })
-            Text("  Checkerboard backdrop", color = Muted, fontSize = 14.sp)
         }
 
         // ---- export ---------------------------------------------------------
