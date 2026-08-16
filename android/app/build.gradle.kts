@@ -49,8 +49,8 @@ android {
         // floor for a phone that also runs Subsurface-mobile and Instagram.
         minSdk = 29
         targetSdk = 36
-        versionCode = 7
-        versionName = "0.2.0"
+        versionCode = 8
+        versionName = "0.2.1"
     }
 
     signingConfigs {
@@ -84,6 +84,9 @@ android {
 
     buildFeatures {
         compose = true
+        // For BuildConfig.VERSION_NAME on the start screen. Knowing which build
+        // is on a phone is the first question every bug report needs answered.
+        buildConfig = true
     }
 
     compileOptions {

@@ -60,6 +60,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.github.paulcharp.diveslate.BuildConfig
 import io.github.paulcharp.diveslate.SlateExport
 import io.github.paulcharp.diveslate.SlateFiles
 import io.github.paulcharp.diveslate.SlatePainter
@@ -221,11 +222,17 @@ private fun Welcome(onLoadSample: () -> Unit, onPickFile: () -> Unit) {
     ) {
         Text("Dive Slate", color = OnSurface, fontSize = 30.sp, fontWeight = FontWeight.Bold)
         Text(
+            "v${BuildConfig.VERSION_NAME}",
+            color = Muted,
+            fontSize = 12.sp,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+        Text(
             "Share a dive from Subsurface, open an export from your files, " +
                 "or start with the bundled sample.",
             color = Muted,
             fontSize = 15.sp,
-            modifier = Modifier.padding(top = 12.dp, bottom = 28.dp),
+            modifier = Modifier.padding(top = 16.dp, bottom = 28.dp),
         )
         Button(onClick = onPickFile, modifier = Modifier.fillMaxWidth()) {
             Text("Open a dive log")

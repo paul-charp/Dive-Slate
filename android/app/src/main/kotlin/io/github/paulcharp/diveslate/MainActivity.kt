@@ -92,13 +92,18 @@ class MainActivity : ComponentActivity() {
             }
         }.distinct()
 
-        var failure: Exception? = null
+        // Every attempt is recorded, not just the last. A share can carry both a
+        // file and a scrap of text; reporting only the final failure let the
+        // text attempt — which fails with a bare "unrecognised format" — mask
+        // the detailed reason the actual file could not be read.
+        val attempts = mutableListOf<String>()
+
         for (uri in uris) {
             try {
                 state = LoadState.Loaded(readLog(uri))
                 return
             } catch (e: Exception) {
-                failure = e
+                attempts += "• file ${uri.scheme}:…/${uri.lastPathSegment ?: "?"}\n${describe(e)}"
             }
         }
 
@@ -114,11 +119,15 @@ class MainActivity : ComponentActivity() {
                 state = LoadState.Loaded(parseText(inlined, source = "shared text"))
                 return
             } catch (e: Exception) {
-                failure = e
+                attempts += "• inline text, ${inlined.length} chars\n" +
+                    "${describe(e)}\nstarts with: ${inlined.take(120)}"
             }
         }
 
-        state = LoadState.Failed(failure?.let { describe(it) } ?: describeShare(intent, uris))
+        state = LoadState.Failed(
+            if (attempts.isEmpty()) describeShare(intent, uris)
+            else attempts.joinToString("\n\n")
+        )
     }
 
     /**
