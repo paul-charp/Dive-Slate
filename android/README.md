@@ -34,9 +34,19 @@ yourself (`keytool -genkeypair`) plus a `signingConfigs` block reading from
 
 ## What the app does
 
-Receives a `.ssrf` or `.uddf` through a share intent (or opens the bundled
-sample), previews the slate over a checkerboard, and exports it either to
-Instagram as a story sticker or to the gallery as a transparent PNG.
+Takes a `.ssrf` or `.uddf` — shared in from Subsurface-mobile, picked out of your
+files, or the bundled sample — previews the slate over a checkerboard, and
+exports it.
+
+**Save to gallery** is the primary action and writes a transparent PNG to
+Pictures › Dive Slate, confirmed with a snackbar because a MediaStore write is
+otherwise silent and lands in an album you are not looking at. **Share** hands
+the slate to Instagram as a story sticker, falling back to a normal share sheet
+when Instagram is absent.
+
+The file picker offers every type, because a Subsurface export has no MIME type
+of its own and filtering would hide the very files this is for. Content is
+sniffed after picking.
 
 Adjustable: palette (nine, grouped by the surface each was validated against),
 wide or tall layout, which elements appear, which figures are shown, and the
@@ -91,8 +101,9 @@ record:
 
 ## Known gaps
 
-- Settings do not persist across launches.
-- `ADD_TO_STORY` is untested end to end; only the fallback share path has run,
-  because Instagram is not installed on the emulator.
+- Settings do not persist across launches: palette, format, opacity and figure
+  choices reset every time.
 - No background-media picker, so the palette cannot yet be judged against your
-  own footage.
+  own footage — only against the checkerboard.
+- **Share** goes straight to Instagram when it is installed rather than offering
+  a chooser, which the button's name no longer quite implies.

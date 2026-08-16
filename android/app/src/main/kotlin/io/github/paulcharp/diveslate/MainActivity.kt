@@ -36,6 +36,8 @@ class MainActivity : ComponentActivity() {
             DiveSlateApp(
                 state = state,
                 onLoadSample = { loadBundledSample() },
+                onOpenUri = { uri -> openPicked(uri) },
+                onBack = { state = LoadState.Empty },
                 onExport = { slate, background -> exportToInstagram(slate, background) },
                 onSaveToGallery = { slate, title -> saveToGallery(slate, title) },
             )
@@ -93,6 +95,22 @@ class MainActivity : ComponentActivity() {
         return parseText(text, hint = name, source = name)
     }
 
+    /**
+     * Open a log the user picked out of their files.
+     *
+     * Same path as a share: read now, keep our own copy, sniff the content. The
+     * picker offers every file type because a Subsurface export has no MIME type
+     * of its own — filtering would hide the very files this is for — so anything
+     * can arrive here and being refused clearly is part of the job.
+     */
+    private fun openPicked(uri: Uri) {
+        state = try {
+            LoadState.Loaded(readLog(uri))
+        } catch (e: Exception) {
+            LoadState.Failed(describe(e))
+        }
+    }
+
     private fun loadBundledSample() {
         state = try {
             val text = assets.open("sample.ssrf").use { it.readBytes().decodeToString() }
@@ -117,9 +135,13 @@ class MainActivity : ComponentActivity() {
     private fun saveToGallery(export: SlateExport, title: String) {
         state = try {
             SlateFiles.saveToGallery(this, export, title)
-            state.withMessage("Saved to Pictures/Dive Slate")
+            // Confirmed explicitly. Writing through MediaStore is silent and the
+            // file lands in an album the user is not looking at, so without this
+            // a successful save is indistinguishable from a button that did
+            // nothing.
+            state.withMessage("Saved to Pictures › Dive Slate")
         } catch (e: Exception) {
-            state.withMessage("could not save the PNG: ${e.message ?: e::class.simpleName}")
+            state.withMessage("Could not save: ${e.message ?: e::class.simpleName}")
         }
     }
 

@@ -1,5 +1,9 @@
 package io.github.paulcharp.diveslate.ui
 
+import android.net.Uri
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -27,9 +31,14 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -60,15 +69,24 @@ import io.github.paulcharp.diveslate.core.SlateLayout
 import io.github.paulcharp.diveslate.core.SlateTheme
 import io.github.paulcharp.diveslate.core.renderOverlay
 
+/**
+ * Something to tell the user once.
+ *
+ * Carries an id so two identical messages — saving twice in a row — still read
+ * as two events. Keyed only on the text, the second save would silently show
+ * nothing, which is precisely the case where a confirmation matters most.
+ */
+data class Notice(val text: String, val id: Long = System.nanoTime())
+
 /** What the activity has managed to load. */
 sealed interface LoadState {
     data object Empty : LoadState
-    data class Loaded(val log: DiveLog, val message: String? = null) : LoadState
+    data class Loaded(val log: DiveLog, val notice: Notice? = null) : LoadState
     data class Failed(val message: String) : LoadState
 }
 
 fun LoadState.withMessage(message: String): LoadState = when (this) {
-    is LoadState.Loaded -> copy(message = message)
+    is LoadState.Loaded -> copy(notice = Notice(message))
     else -> LoadState.Failed(message)
 }
 
@@ -76,8 +94,8 @@ fun LoadState.withMessage(message: String): LoadState = when (this) {
  * The story background sent to Instagram when no media is chosen.
  *
  * Bright cyan over near-black, mirroring what actually sits behind a dive
- * overlay: blown-out surface light and deep water. Still exported, but no
- * longer what the preview shows — see [drawCheckerboard].
+ * overlay: blown-out surface light and deep water. Still exported, but not what
+ * the preview shows — see [drawCheckerboard].
  */
 private const val BACKDROP_TOP = 0xFF2BA3C7L
 private const val BACKDROP_BOTTOM = 0xFF04070AL
@@ -85,12 +103,9 @@ private const val BACKDROP_BOTTOM = 0xFF04070AL
 /**
  * Checkerboard greys.
  *
- * Deliberately light. The convention would be to read this as "just the
- * transparency indicator", but it doubles as the adversarial case for the dark
- * palettes: a white-ish backdrop is exactly the worst backdrop their scrim
- * floors were computed against, so a slate that holds up here holds up
- * anywhere. It answers a different question from the gradient, which showed
- * how the slate sits on plausible footage.
+ * Deliberately light. Beyond indicating transparency, a white-ish backdrop is
+ * exactly the worst case the dark palettes' scrim floors were computed against,
+ * so a slate that holds up here holds up anywhere.
  */
 private const val CHECKER_LIGHT = 0xFFE7EAEC
 private const val CHECKER_DARK = 0xFFAFB6BA
@@ -101,11 +116,15 @@ private val OnSurface = Color(0xFFE8EAEC)
 private val Muted = Color(0xFF8C9599)
 
 /**
- * Display names for the stat keys the core exposes.
+ * Everything is offered, because a dive log has no MIME type of its own.
  *
- * Order is the order they are offered in, which is roughly how useful they are
- * on a badge — the first two are the numbers every diver reads first.
+ * Subsurface exports arrive as `.ssrf`, and file managers variously report that
+ * as octet-stream, plain text, or nothing at all. Filtering on type would hide
+ * the very files this exists to open. The content is sniffed after picking, and
+ * anything that is not a dive log is refused with a clear message.
  */
+private val PICKER_TYPES = arrayOf("*/*")
+
 private val STAT_LABELS = listOf(
     "depth" to "Depth",
     "time" to "Runtime",
@@ -123,24 +142,49 @@ private val STAT_LABELS = listOf(
 fun DiveSlateApp(
     state: LoadState,
     onLoadSample: () -> Unit,
+    onOpenUri: (Uri) -> Unit,
+    onBack: () -> Unit,
     onExport: (SlateExport, Pair<Long, Long>) -> Unit,
     onSaveToGallery: (SlateExport, String) -> Unit,
 ) {
     MaterialTheme {
-        // The window draws edge to edge, so content insets itself out from
-        // under the system bars.
+        val snackbars = remember { SnackbarHostState() }
+
+        val picker = rememberLauncherForActivityResult(
+            ActivityResultContracts.OpenDocument()
+        ) { uri -> uri?.let(onOpenUri) }
+
+        // The system back gesture should return to the start screen rather than
+        // leaving the app, whenever there is something to go back from.
+        BackHandler(enabled = state !is LoadState.Empty) { onBack() }
+
         Box(Modifier.fillMaxSize().background(Surface).safeDrawingPadding()) {
             when (state) {
-                is LoadState.Empty -> Welcome(onLoadSample)
-                is LoadState.Failed -> Problem(state.message, onLoadSample)
-                is LoadState.Loaded -> Editor(state, onExport, onSaveToGallery)
+                is LoadState.Empty -> Welcome(onLoadSample) { picker.launch(PICKER_TYPES) }
+                is LoadState.Failed -> Problem(state.message, onBack) {
+                    picker.launch(PICKER_TYPES)
+                }
+                is LoadState.Loaded -> Editor(state, onBack, onExport, onSaveToGallery)
             }
+
+            SnackbarHost(
+                hostState = snackbars,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp),
+            ) { data ->
+                Snackbar(snackbarData = data, containerColor = Color(0xFF1E2A30))
+            }
+        }
+
+        // Keyed on the notice's id, so a second identical message still shows.
+        val notice = (state as? LoadState.Loaded)?.notice
+        LaunchedEffect(notice?.id) {
+            notice?.let { snackbars.showSnackbar(it.text) }
         }
     }
 }
 
 @Composable
-private fun Welcome(onLoadSample: () -> Unit) {
+private fun Welcome(onLoadSample: () -> Unit, onPickFile: () -> Unit) {
     Column(
         Modifier.fillMaxSize().padding(28.dp),
         verticalArrangement = Arrangement.Center,
@@ -148,18 +192,26 @@ private fun Welcome(onLoadSample: () -> Unit) {
     ) {
         Text("Dive Slate", color = OnSurface, fontSize = 30.sp, fontWeight = FontWeight.Bold)
         Text(
-            "Export a dive from Subsurface and share it here, " +
+            "Share a dive from Subsurface, open an export from your files, " +
                 "or start with the bundled sample.",
             color = Muted,
             fontSize = 15.sp,
             modifier = Modifier.padding(top = 12.dp, bottom = 28.dp),
         )
-        Button(onClick = onLoadSample) { Text("Open the sample dive") }
+        Button(onClick = onPickFile, modifier = Modifier.fillMaxWidth()) {
+            Text("Open a dive log")
+        }
+        OutlinedButton(
+            onClick = onLoadSample,
+            modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+        ) {
+            Text("Open the sample dive")
+        }
     }
 }
 
 @Composable
-private fun Problem(message: String, onLoadSample: () -> Unit) {
+private fun Problem(message: String, onBack: () -> Unit, onPickFile: () -> Unit) {
     Column(
         Modifier.fillMaxSize().padding(28.dp),
         verticalArrangement = Arrangement.Center,
@@ -167,21 +219,25 @@ private fun Problem(message: String, onLoadSample: () -> Unit) {
     ) {
         Text("That did not load", color = OnSurface, fontSize = 22.sp, fontWeight = FontWeight.Bold)
         Text(message, color = Muted, fontSize = 15.sp, modifier = Modifier.padding(vertical = 16.dp))
-        Button(onClick = onLoadSample) { Text("Open the sample dive instead") }
+        Button(onClick = onPickFile, modifier = Modifier.fillMaxWidth()) {
+            Text("Try another file")
+        }
+        TextButton(onClick = onBack, modifier = Modifier.padding(top = 6.dp)) {
+            Text("Back to start")
+        }
     }
 }
 
 @Composable
 private fun Editor(
     state: LoadState.Loaded,
+    onBack: () -> Unit,
     onExport: (SlateExport, Pair<Long, Long>) -> Unit,
     onSaveToGallery: (SlateExport, String) -> Unit,
 ) {
     val log = state.log
     var diveIndex by remember { mutableIntStateOf(0) }
     var themeIndex by remember { mutableIntStateOf(0) }
-    // Wide by default: it suits a feed post or the corner of a video, which is
-    // the common case. Tall is the deliberate choice for a full-height story.
     var tall by remember { mutableStateOf(false) }
     var showBackdrop by remember { mutableStateOf(true) }
     var opacity by remember { mutableFloatStateOf(SLATE_THEMES[0].scrimAlphaNominal) }
@@ -191,8 +247,6 @@ private fun Editor(
     var showScrim by remember { mutableStateOf(true) }
     var showCeiling by remember { mutableStateOf(true) }
     var showGas by remember { mutableStateOf(false) }
-    // Empty means automatic: the renderer picks the most headline-worthy
-    // figures the log can actually answer.
     var chosenStats by remember { mutableStateOf(emptySet<String>()) }
 
     val theme = SLATE_THEMES[themeIndex]
@@ -226,6 +280,10 @@ private fun Editor(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onBack) { Text("← Back") }
+        }
+
         Text(dive.title, color = OnSurface, fontSize = 19.sp, fontWeight = FontWeight.Bold)
 
         if (log.size > 1) {
@@ -249,12 +307,8 @@ private fun Editor(
                 fontSize = 14.sp,
             )
         }
-        state.message?.let { Text(it, color = Muted, fontSize = 13.sp) }
 
         // ---- panel opacity --------------------------------------------------
-        // Directly under the preview: it is the one control whose effect is
-        // continuous rather than a discrete switch, so it wants the shortest
-        // possible path between dragging and seeing.
         Label("Panel opacity  ${(opacity.coerceIn(minOpacity, 1f) * 100).toInt()}%")
         Slider(
             value = opacity.coerceIn(minOpacity, 1f),
@@ -266,38 +320,23 @@ private fun Editor(
             enabled = showScrim,
         )
 
-        // Sits with the slider because the two are read together: the slider
-        // changes the panel's opacity, and this is what makes that opacity
-        // visible. It is also the only control here that changes nothing about
-        // the export.
         Row(verticalAlignment = Alignment.CenterVertically) {
             Switch(checked = showBackdrop, onCheckedChange = { showBackdrop = it })
             Text("  Checkerboard backdrop", color = Muted, fontSize = 14.sp)
         }
 
         // ---- palette --------------------------------------------------------
-        // Grouped, because a palette validated against dark footage and one
-        // validated against a pale page are not interchangeable, and nothing in
-        // the colours themselves says which is which.
         Label("Palette — for dark footage")
-        PaletteRow(
-            themes = SLATE_THEMES.filter { it.isDark },
-            selected = theme,
-            onPick = { picked ->
-                themeIndex = SLATE_THEMES.indexOf(picked)
-                opacity = opacity.coerceAtLeast(picked.scrimAlphaMin)
-            },
-        )
+        PaletteRow(SLATE_THEMES.filter { it.isDark }, theme) { picked ->
+            themeIndex = SLATE_THEMES.indexOf(picked)
+            opacity = opacity.coerceAtLeast(picked.scrimAlphaMin)
+        }
 
         Label("Palette — for pale backgrounds")
-        PaletteRow(
-            themes = SLATE_THEMES.filter { !it.isDark },
-            selected = theme,
-            onPick = { picked ->
-                themeIndex = SLATE_THEMES.indexOf(picked)
-                opacity = opacity.coerceAtLeast(picked.scrimAlphaMin)
-            },
-        )
+        PaletteRow(SLATE_THEMES.filter { !it.isDark }, theme) { picked ->
+            themeIndex = SLATE_THEMES.indexOf(picked)
+            opacity = opacity.coerceAtLeast(picked.scrimAlphaMin)
+        }
 
         // ---- format ---------------------------------------------------------
         Label("Format")
@@ -346,22 +385,25 @@ private fun Editor(
         }
 
         // ---- export ---------------------------------------------------------
+        // Saving leads. The PNG is what this project actually produces, and it
+        // is the option that works regardless of which apps are installed;
+        // handing it straight to one particular app is the specialised case.
         val export = slate?.let { SlateExport(it, SlateFiles.EXPORT_SCALE) }
 
         Button(
-            onClick = { export?.let { onExport(it, BACKDROP_TOP to BACKDROP_BOTTOM) } },
+            onClick = { export?.let { onSaveToGallery(it, dive.title) } },
             enabled = export != null,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Send to Instagram")
+            Text("Save to gallery")
         }
 
         OutlinedButton(
-            onClick = { export?.let { onSaveToGallery(it, dive.title) } },
+            onClick = { export?.let { onExport(it, BACKDROP_TOP to BACKDROP_BOTTOM) } },
             enabled = export != null,
             modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
         ) {
-            Text("Save transparent PNG")
+            Text("Share")
         }
     }
 }
@@ -374,18 +416,14 @@ private const val PREVIEW_MARGIN = 1.28f
 
 @Composable
 private fun Preview(slate: Slate?, showBackdrop: Boolean) {
-    // Sized from the slate rather than to a 9:16 story frame. The slate is the
-    // deliverable — the backdrop is only there to judge legibility against —
-    // and a full story frame spent most of its height showing empty gradient
-    // that is not part of what gets exported.
+    // Sized from the slate rather than to a 9:16 story frame: the slate is the
+    // deliverable, and the backdrop is only there to judge legibility against.
     val ratio = slate?.let {
         val drawnHeight = SLATE_FRACTION * (it.height / it.width)
         (1f / (drawnHeight * PREVIEW_MARGIN)).coerceIn(0.7f, 2.6f)
     } ?: (4f / 3f)
 
-    Box(
-        Modifier.fillMaxWidth().aspectRatio(ratio).clip(RoundedCornerShape(14.dp)),
-    ) {
+    Box(Modifier.fillMaxWidth().aspectRatio(ratio).clip(RoundedCornerShape(14.dp))) {
         Canvas(Modifier.fillMaxSize()) {
             if (showBackdrop) drawCheckerboard()
             val current = slate ?: return@Canvas
@@ -404,12 +442,6 @@ private fun Preview(slate: Slate?, showBackdrop: Boolean) {
     }
 }
 
-/**
- * Fill the preview with an alpha checkerboard.
- *
- * Painted rather than tiled from a bitmap because the cells need to scale with
- * the preview, and the whole thing is two colours and a parity test.
- */
 private fun DrawScope.drawCheckerboard() {
     drawRect(Color(CHECKER_LIGHT.toInt()))
 
@@ -424,8 +456,8 @@ private fun DrawScope.drawCheckerboard() {
                 drawRect(
                     color = Color(CHECKER_DARK.toInt()),
                     topLeft = Offset(x, y),
-                    // Clamped so the last cell in each direction is cropped
-                    // rather than painted past the rounded corners.
+                    // Clamped so the last cell is cropped rather than painted
+                    // past the rounded corners.
                     size = Size(
                         width = minOf(cell, size.width - x),
                         height = minOf(cell, size.height - y),
@@ -463,20 +495,18 @@ private fun PaletteRow(
 }
 
 /**
- * A swatch showing what the palette actually is: its two themed marks sitting
- * on the surface it was validated against.
+ * A swatch showing what the palette is: its two themed marks on the surface it
+ * was validated against.
  *
  * A single dot of the curve colour cannot distinguish a dark-mode palette from
  * a light-mode one — several pairs share a hue and differ only in the
- * background they were checked against. Showing the surface is what makes the
- * two groups legible at a glance.
+ * background they were checked against.
  */
 @Composable
 private fun PaletteSwatch(theme: SlateTheme, selected: Boolean, onClick: () -> Unit) {
-    val diameter = if (selected) 48.dp else 40.dp
     Box(
         Modifier
-            .size(diameter)
+            .size(if (selected) 48.dp else 40.dp)
             .clip(CircleShape)
             .background(Color(theme.assumedSurface.toInt()))
             .border(
@@ -488,10 +518,7 @@ private fun PaletteSwatch(theme: SlateTheme, selected: Boolean, onClick: () -> U
         contentAlignment = Alignment.Center,
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-            // The depth curve — the mark the eye goes to first.
             Bar(Color(theme.curve.toInt()), tall = true)
-            // The gas accent, chosen by search to separate from both the curve
-            // and the fixed ceiling red.
             Bar(Color(theme.accent.toInt()), tall = false)
         }
     }
@@ -521,8 +548,7 @@ private fun Toggle(label: String, checked: Boolean, onChange: (Boolean) -> Unit)
  * Chips that wrap rather than scroll.
  *
  * A horizontally scrolling row hid its own tail: with ten figures on offer the
- * last few sat off the right edge with nothing indicating they existed. An
- * option you cannot see is an option you do not have.
+ * last few sat off the right edge with nothing indicating they existed.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
