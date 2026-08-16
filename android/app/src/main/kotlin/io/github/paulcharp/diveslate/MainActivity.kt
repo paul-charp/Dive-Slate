@@ -175,7 +175,16 @@ class MainActivity : ComponentActivity() {
 
         // Detection is by content: a shared URI frequently carries no usable
         // filename, and both formats routinely arrive as plain .xml anyway.
-        return parseText(text, hint = name, source = name)
+        val log = parseText(text, hint = name, source = name)
+
+        // A well-formed log with nothing in it. Subsurface will happily export
+        // an empty dive list, and the result parses perfectly — there is simply
+        // nothing to draw. Refusing here says so plainly; letting it through
+        // left the editor to index into an empty list.
+        if (log.dives.isEmpty()) {
+            throw ParseException("that log parsed fine, but it contains no dives")
+        }
+        return log
     }
 
     /**

@@ -260,7 +260,21 @@ private fun Editor(
     var chosenStats by remember { mutableStateOf(emptySet<String>()) }
 
     val theme = SLATE_THEMES[themeIndex]
-    val dive: Dive = log[diveIndex.coerceIn(0, log.size - 1)]
+    // getOrNull rather than an index: an empty log is rejected at load, but a
+    // crash here would be a blank screen with no way back, and coerceIn(0, -1)
+    // on an empty list throws rather than clamping.
+    val dive: Dive? = log.dives.getOrNull(diveIndex) ?: log.dives.firstOrNull()
+    if (dive == null) {
+        Column(
+            Modifier.fillMaxSize().padding(28.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text("This log contains no dives.", color = OnSurface, fontSize = 18.sp)
+            TextButton(onClick = onBack) { Text("Back to start") }
+        }
+        return
+    }
     val minOpacity = theme.scrimAlphaMin
 
     val slate = remember(
