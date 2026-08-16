@@ -21,18 +21,44 @@ import org.w3c.dom.Node
  */
 internal object Xml {
 
+    /**
+     * Features worth requesting, none of which can be relied on.
+     *
+     * Android does not use Xerces, so the Apache feature names throw
+     * `ParserConfigurationException` there rather than hardening anything —
+     * which is why the real guarantee is the doctype scan below and not this
+     * list. These are still set where they are understood, as defence in depth
+     * on the JVM.
+     */
+    private val HARDENING = listOf(
+        "http://apache.org/xml/features/disallow-doctype-decl" to true,
+        "http://xml.org/sax/features/external-general-entities" to false,
+        "http://xml.org/sax/features/external-parameter-entities" to false,
+        "http://apache.org/xml/features/nonvalidating/load-external-dtd" to false,
+    )
+
     fun parse(text: String): Element {
+        // The actual XXE defence, and deliberately not delegated to the parser:
+        // a document that declares a doctype is refused before any parser sees
+        // it, so the guarantee does not depend on which XML implementation the
+        // platform happens to ship.
+        if (text.contains("<!DOCTYPE", ignoreCase = true)) {
+            throw ParseException(
+                "this document declares a DOCTYPE, which dive logs do not use and " +
+                    "which can be used to read files off the device"
+            )
+        }
+
         val factory = DocumentBuilderFactory.newInstance().apply {
-            // Refusing the doctype outright removes the entire XXE surface;
-            // the remaining flags matter for parsers that ignore that one.
-            setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
-            setFeature("http://xml.org/sax/features/external-general-entities", false)
-            setFeature("http://xml.org/sax/features/external-parameter-entities", false)
-            setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false)
-            setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "")
-            setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "")
-            isXIncludeAware = false
-            isExpandEntityReferences = false
+            for ((feature, value) in HARDENING) {
+                runCatching { setFeature(feature, value) }
+            }
+            runCatching { setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "") }
+            runCatching { setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "") }
+            // Android's factory throws UnsupportedOperationException for these
+            // rather than accepting them, so they are requests, not settings.
+            runCatching { isXIncludeAware = false }
+            runCatching { isExpandEntityReferences = false }
             isNamespaceAware = false // tags are matched on local name throughout
         }
 

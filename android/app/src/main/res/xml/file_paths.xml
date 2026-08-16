@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Rendered slates, handed to Instagram as content:// URIs. -->
+    <cache-path
+        name="slates"
+        path="slates/" />
+    <!-- Dive logs copied off an incoming share, so they survive the grant. -->
+    <files-path
+        name="logs"
+        path="logs/" />
+</paths>

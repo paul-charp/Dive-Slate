@@ -1,9 +1,5 @@
 plugins {
-    kotlin("jvm") version "2.2.20"
-}
-
-repositories {
-    mavenCentral()
+    kotlin("jvm")
 }
 
 dependencies {
@@ -16,8 +12,8 @@ dependencies {
 }
 
 kotlin {
-    // 21 matches the JDK installed for this project. Android's toolchain is
-    // configured separately in the app module, so this does not constrain it.
+    // 21 for the JVM tests. The app module sets its own Android target, so this
+    // does not constrain what the phone runs.
     jvmToolchain(21)
 }
 
