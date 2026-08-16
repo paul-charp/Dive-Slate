@@ -251,6 +251,21 @@ private fun Editor(
         }
         state.message?.let { Text(it, color = Muted, fontSize = 13.sp) }
 
+        // ---- panel opacity --------------------------------------------------
+        // Directly under the preview: it is the one control whose effect is
+        // continuous rather than a discrete switch, so it wants the shortest
+        // possible path between dragging and seeing.
+        Label("Panel opacity  ${(opacity.coerceIn(minOpacity, 1f) * 100).toInt()}%")
+        Slider(
+            value = opacity.coerceIn(minOpacity, 1f),
+            onValueChange = { opacity = it },
+            // The floor is where ink stops clearing 4.5:1 against the worst
+            // possible backdrop. Below it the panel has stopped working and the
+            // halo is carrying the text alone, which is not enough over video.
+            valueRange = minOpacity..1f,
+            enabled = showScrim,
+        )
+
         // ---- palette --------------------------------------------------------
         // Grouped, because a palette validated against dark footage and one
         // validated against a pale page are not interchangeable, and nothing in
@@ -320,18 +335,6 @@ private fun Editor(
                 fontSize = 12.sp,
             )
         }
-
-        // ---- panel opacity --------------------------------------------------
-        Label("Panel opacity  ${(opacity.coerceIn(minOpacity, 1f) * 100).toInt()}%")
-        Slider(
-            value = opacity.coerceIn(minOpacity, 1f),
-            onValueChange = { opacity = it },
-            // The floor is where ink stops clearing 4.5:1 against the worst
-            // possible backdrop. Below it the panel has stopped working and the
-            // halo is carrying the text alone, which is not enough over video.
-            valueRange = minOpacity..1f,
-            enabled = showScrim,
-        )
 
         Row(verticalAlignment = Alignment.CenterVertically) {
             Switch(checked = showBackdrop, onCheckedChange = { showBackdrop = it })
