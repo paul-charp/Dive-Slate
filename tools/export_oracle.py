@@ -342,6 +342,97 @@ DECO_MODELS = (
 )
 
 
+#: Synthetic deco profiles, as ``(minute_predicate -> depth, in_deco, ceiling)``
+#: tables expanded below.
+#:
+#: The logs in ``tests/data`` all carry a single deco span, so on their own they
+#: cannot distinguish the correct pairing of ceiling arrival to span end from
+#: the defect that pairs the first arrival with the *last* span's end. That case
+#: only exists in synthetic profiles, and without exporting them a port would
+#: reproduce the bug and still pass every fixture.
+def _profile(rows: list[tuple[int, float, bool, float | None]]) -> list[Sample]:
+    """Expand ``(minute, depth, in_deco, ceiling)`` rows into a sample series."""
+    return [
+        Sample(minute * 60.0, depth, in_deco=deco, stop_depth_m=ceiling)
+        for minute, depth, deco, ceiling in rows
+    ]
+
+
+def _ramp(
+    start: int, stop: int, depth: float, deco: bool, ceiling: float | None
+) -> list[tuple[int, float, bool, float | None]]:
+    return [(m, depth, deco, ceiling) for m in range(start, stop)]
+
+
+DECO_PROFILES: dict[str, list[tuple[int, float, bool, float | None]]] = {
+    # Deep and owing deco from 5 min, but only reaching the 6 m ceiling at 20;
+    # the obligation clears at 30. The hang is 10 min, the obligation 25.
+    "single_hang": (
+        _ramp(0, 5, 40.0, False, None)
+        + _ramp(5, 20, 40.0, True, 6.0)
+        + _ramp(20, 30, 6.0, True, 6.0)
+        + _ramp(30, 41, 3.0, False, None)
+    ),
+    # Clears deco at 30, drops back down, incurs it again at 40. Two hangs of
+    # 10 min each — not the 40 min spanning both plus the cleared gap.
+    "reincurred": (
+        _ramp(0, 5, 40.0, False, None)
+        + _ramp(5, 20, 40.0, True, 6.0)
+        + _ramp(20, 30, 6.0, True, 6.0)
+        + _ramp(30, 40, 5.0, False, None)
+        + _ramp(40, 50, 30.0, True, 9.0)
+        + _ramp(50, 60, 9.0, True, 9.0)
+        + _ramp(60, 66, 3.0, False, None)
+    ),
+    # A served hang followed by an obligation the diver never served. The first
+    # must still be reported rather than voided by the second.
+    "unserved_after_served": (
+        [(0, 40.0, True, 6.0)]
+        + _ramp(1, 11, 6.0, True, 6.0)
+        + [(11, 3.0, False, None)]
+        + _ramp(12, 20, 30.0, True, 9.0)
+    ),
+    # No obligation at all.
+    "no_deco": _ramp(0, 10, 18.0, False, None),
+    # Owing deco throughout and surfacing still owing it: no hang was served.
+    "never_reached": _ramp(0, 10, 40.0, True, 6.0),
+    # Span left open at the last sample must still close.
+    "surfaces_in_deco": (
+        _ramp(0, 3, 30.0, False, None) + _ramp(3, 8, 6.0, True, 6.0)
+    ),
+}
+
+
+def deco_cases_json() -> list[dict[str, Any]]:
+    """Each synthetic profile with the figures the implementation derives."""
+    cases: list[dict[str, Any]] = []
+    for name, rows in DECO_PROFILES.items():
+        dive = Dive(samples=tuple(_profile(rows)))
+        cases.append({
+            "name": name,
+            "samples": [
+                {
+                    "time_s": num(minute * 60.0),
+                    "depth_m": num(depth),
+                    "in_deco": deco,
+                    "stop_depth_m": num(ceiling),
+                }
+                for minute, depth, deco, ceiling in rows
+            ],
+            "deco_spans": [
+                {
+                    "start_s": num(span.start_s),
+                    "end_s": num(span.end_s),
+                    "duration_s": num(span.duration_s),
+                }
+                for span in dive.deco_spans()
+            ],
+            "deco_time_s": num(dive.deco_time_s()),
+            "deco_time_s_tolerance_0": num(dive.deco_time_s(tolerance_m=0.0)),
+        })
+    return cases
+
+
 def specs_json() -> dict[str, Any]:
     return {
         "schema": SCHEMA,
@@ -373,6 +464,7 @@ def specs_json() -> dict[str, Any]:
             }
             for model in DECO_MODELS
         ],
+        "deco_cases": deco_cases_json(),
         "gas_names": [
             {"o2": num(o2), "he": num(he), "name": GasMix(o2=o2, he=he).name}
             for o2, he in (

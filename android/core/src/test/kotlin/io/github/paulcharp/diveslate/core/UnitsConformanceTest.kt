@@ -31,18 +31,7 @@ import kotlinx.serialization.json.jsonPrimitive
 class UnitsConformanceTest {
 
     private companion object {
-        /** Fixtures live at the repo root, above the Gradle project. */
-        val repoRoot: File = generateSequence(
-            File(System.getProperty("user.dir")).absoluteFile
-        ) { it.parentFile }
-            .firstOrNull { File(it, "conformance").isDirectory }
-            ?: error("could not locate conformance/ above ${System.getProperty("user.dir")}")
-
-        val specs: JsonObject by lazy {
-            val file = File(repoRoot, "conformance/specs.json")
-            check(file.isFile) { "missing $file — run tools/export_oracle.py" }
-            Json.parseToJsonElement(file.readText()).jsonObject
-        }
+        val specs: JsonObject get() = Fixtures.specs
 
         /** The fixtures round to six places, so compare within that. */
         const val TOLERANCE = 1e-6
