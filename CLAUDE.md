@@ -129,6 +129,41 @@ span's end. That case exists only in synthetic profiles, which is why
 `specs.json` carries a `deco_cases` section. Verified by reintroducing the
 defect: the synthetic case failed and every real-log test passed.
 
+### How a dive log actually arrives
+
+Established by installing Subsurface-mobile in an emulator and watching what its
+export fires, because none of it is documented and every guess was wrong:
+
+```
+act=android.intent.action.SEND_MULTIPLE  typ=text/plain
+clip={text/plain {U(content)}}
+```
+
+Three things there each broke the app once:
+
+- **`SEND_MULTIPLE`, not `SEND`.** A filter for `SEND` alone never appears in
+  the chooser.
+- **`text/plain`, matched by a `text/*` wildcard.** Enumerating `text/xml` and
+  `text/plain` was not enough to be offered — Submersion's filters, which do
+  appear, use the wildcard. The type it stamps is not guaranteed.
+- **The URI is in `ClipData`, not `EXTRA_STREAM`.** Reading only the stream
+  extra found nothing and returned silently, so picking Dive Slate did nothing
+  at all.
+
+`handleIntent` therefore tries the data URI, the stream extra, the stream-extra
+list and every ClipData item, then falls back to text inlined in `EXTRA_TEXT` —
+and **never returns without setting state**. A share that produces no visible
+result is indistinguishable from a crash and impossible to report; an unusable
+intent now ends on a screen naming what arrived.
+
+**Subsurface's database cannot be read directly.** `/data/data/
+org.subsurfacedivelog.mobile` is denied to other apps, and the only provider
+Subsurface declares is a `FileProvider` for files it chooses to share. The
+export is not a workaround, it is the only route Android permits. (Its desktop
+cloud cache *is* readable, at `%APPDATA%\Subsurface\cloudstorage` — a git
+working tree of per-dive text files. That is how the format was inspected; it
+has no bearing on the phone.)
+
 ### What did not come across
 
 The full chart (`profile.py`), SVG output, canvas placement modes, and the

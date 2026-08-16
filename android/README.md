@@ -35,8 +35,11 @@ yourself (`keytool -genkeypair`) plus a `signingConfigs` block reading from
 ## What the app does
 
 Takes a `.ssrf` or `.uddf` — shared in from Subsurface-mobile, picked out of your
-files, or the bundled sample — previews the slate over a checkerboard, and
-exports it.
+files, or the bundled sample — lists the dives newest first, then previews the
+chosen one over a checkerboard and exports it. A single-dive log skips the list.
+
+The share handover is fussier than it looks; see *How a dive log actually
+arrives* in CLAUDE.md before touching the intent filters or `handleIntent`.
 
 **Save to gallery** is the primary action and writes a transparent PNG to
 Pictures › Dive Slate, confirmed with a snackbar because a MediaStore write is
@@ -107,3 +110,7 @@ record:
   own footage — only against the checkerboard.
 - **Share** goes straight to Instagram when it is installed rather than offering
   a chooser, which the button's name no longer quite implies.
+- No library. Every incoming log is already copied to `filesDir/logs/` with a
+  timestamp, and nothing ever reads that directory back — so re-rendering an
+  old dive means exporting it from Subsurface again. Surfacing what is already
+  being saved is the cheapest real improvement left.
