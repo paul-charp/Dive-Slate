@@ -250,7 +250,14 @@ class SubsurfaceParser:
             if (uuid := site.get("uuid")) and (name := site.get("name"))
         }
 
-        dives = tuple(cls._parse_dive(el, sites) for el in root.iterfind("dives/dive"))
+        # Dives sit either directly under <dives> or inside a <trip>, and a log
+        # can mix both. Matching only the direct children finds nothing at all
+        # in a logbook where every dive belongs to a trip — which is the normal
+        # case for anyone who groups their dives, and produced a log that
+        # "parsed fine" with zero dives in it.
+        dives_el = root.find("dives")
+        found = dives_el.iterfind(".//dive") if dives_el is not None else ()
+        dives = tuple(cls._parse_dive(el, sites) for el in found)
         return DiveLog(
             dives=dives,
             program=root.get("program"),

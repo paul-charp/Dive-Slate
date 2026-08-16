@@ -100,6 +100,30 @@ class TestDerived:
         assert ssrf_dive.temperature_range_c == (12.0, 18.0)
 
 
+class TestTrips:
+    """Dives grouped into trips must be found, not silently skipped.
+
+    Subsurface nests a trip's dives inside ``<trip>`` rather than leaving them
+    as direct children of ``<dives>``. Matching only the direct children found
+    nothing at all in a logbook where every dive belongs to a trip — a real
+    export that "parsed fine" and yielded zero dives.
+    """
+
+    def test_finds_dives_inside_and_outside_a_trip(self, trips_log: object) -> None:
+        assert [d.number for d in trips_log.dives] == [87, 88, 89]  # type: ignore[attr-defined]
+
+    def test_trip_dives_keep_their_own_metadata(self, trips_log: object) -> None:
+        first = trips_log.dives[0]  # type: ignore[attr-defined]
+        assert first.site == "Le Bananier"
+        assert first.computed_max_depth_m == pytest.approx(16.9)
+        assert first.gradient_factors == (85, 85)
+
+    def test_ungrouped_dive_is_not_lost(self, trips_log: object) -> None:
+        last = trips_log.dives[-1]  # type: ignore[attr-defined]
+        assert last.number == 89
+        assert last.site == "Le Bananier"
+
+
 class TestErrors:
     def test_wrong_root_rejected(self) -> None:
         with pytest.raises(ParseError, match="expected a <divelog> root"):

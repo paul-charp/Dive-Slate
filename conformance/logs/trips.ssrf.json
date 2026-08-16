@@ -1,0 +1,375 @@
+{
+  "schema": 1,
+  "source": "trips.ssrf",
+  "program": "subsurface",
+  "dive_count": 3,
+  "sites": {
+    "aa11bb22": "Le Bananier",
+    "cc33dd44": "Bubble City"
+  },
+  "dives": [
+    {
+      "number": 87,
+      "when": "2026-03-07T11:52:12",
+      "site": "Le Bananier",
+      "buddy": null,
+      "notes": null,
+      "rating": null,
+      "duration_s": 3630.0,
+      "max_depth_m": 16.9,
+      "mean_depth_m": 10.4,
+      "water_temp_c": null,
+      "surface_pressure_bar": null,
+      "salinity_g_l": null,
+      "sac_l_min": null,
+      "otu": null,
+      "cns": null,
+      "computer": "Shearwater Peregrine",
+      "deco_model": "GF 85/85",
+      "tags": [],
+      "cylinders": [],
+      "gas_switches": [],
+      "sample_count": 4,
+      "samples": [
+        {
+          "time_s": 0.0,
+          "depth_m": 0.0,
+          "temp_c": 14.0,
+          "ndl_s": null,
+          "tts_s": null,
+          "in_deco": false,
+          "stop_depth_m": null,
+          "stop_time_s": null,
+          "cns": null,
+          "pressure_bar": null
+        },
+        {
+          "time_s": 60.0,
+          "depth_m": 12.4,
+          "temp_c": 14.0,
+          "ndl_s": null,
+          "tts_s": null,
+          "in_deco": false,
+          "stop_depth_m": null,
+          "stop_time_s": null,
+          "cns": null,
+          "pressure_bar": null
+        },
+        {
+          "time_s": 120.0,
+          "depth_m": 16.9,
+          "temp_c": 14.0,
+          "ndl_s": null,
+          "tts_s": null,
+          "in_deco": false,
+          "stop_depth_m": null,
+          "stop_time_s": null,
+          "cns": null,
+          "pressure_bar": null
+        },
+        {
+          "time_s": 180.0,
+          "depth_m": 4.2,
+          "temp_c": 14.0,
+          "ndl_s": null,
+          "tts_s": null,
+          "in_deco": false,
+          "stop_depth_m": null,
+          "stop_time_s": null,
+          "cns": null,
+          "pressure_bar": null
+        }
+      ],
+      "derived": {
+        "computed_max_depth_m": 16.9,
+        "computed_duration_s": 180.0,
+        "computed_mean_depth_m": 10.4,
+        "temperature_range_c": [
+          14.0,
+          14.0
+        ],
+        "deco_spans": [],
+        "deco_time_s": null,
+        "deco_time_s_tolerance_0": null,
+        "gradient_factors": [
+          85,
+          85
+        ],
+        "gas_used_l": null,
+        "gas_used_by_cylinder": [],
+        "gas_at": [
+          {
+            "time_s": 0.0,
+            "mix": null
+          },
+          {
+            "time_s": 45.0,
+            "mix": null
+          },
+          {
+            "time_s": 90.0,
+            "mix": null
+          },
+          {
+            "time_s": 135.0,
+            "mix": null
+          },
+          {
+            "time_s": 180.0,
+            "mix": null
+          }
+        ],
+        "title": "#87 · Le Bananier",
+        "slate": {
+          "max_depth_ceil_m": 17,
+          "duration_ceil_min": 3,
+          "duration_formatted": [
+            "3",
+            "min"
+          ],
+          "duration_clock": "3:00"
+        }
+      }
+    },
+    {
+      "number": 88,
+      "when": "2026-03-07T15:09:12",
+      "site": "Bubble City",
+      "buddy": null,
+      "notes": null,
+      "rating": null,
+      "duration_s": 2650.0,
+      "max_depth_m": 22.5,
+      "mean_depth_m": 13.1,
+      "water_temp_c": null,
+      "surface_pressure_bar": null,
+      "salinity_g_l": null,
+      "sac_l_min": null,
+      "otu": null,
+      "cns": null,
+      "computer": "Shearwater Peregrine",
+      "deco_model": null,
+      "tags": [],
+      "cylinders": [],
+      "gas_switches": [],
+      "sample_count": 4,
+      "samples": [
+        {
+          "time_s": 0.0,
+          "depth_m": 0.0,
+          "temp_c": 15.0,
+          "ndl_s": null,
+          "tts_s": null,
+          "in_deco": false,
+          "stop_depth_m": null,
+          "stop_time_s": null,
+          "cns": null,
+          "pressure_bar": null
+        },
+        {
+          "time_s": 60.0,
+          "depth_m": 18.0,
+          "temp_c": 15.0,
+          "ndl_s": null,
+          "tts_s": null,
+          "in_deco": false,
+          "stop_depth_m": null,
+          "stop_time_s": null,
+          "cns": null,
+          "pressure_bar": null
+        },
+        {
+          "time_s": 120.0,
+          "depth_m": 22.5,
+          "temp_c": 15.0,
+          "ndl_s": null,
+          "tts_s": null,
+          "in_deco": false,
+          "stop_depth_m": null,
+          "stop_time_s": null,
+          "cns": null,
+          "pressure_bar": null
+        },
+        {
+          "time_s": 180.0,
+          "depth_m": 5.0,
+          "temp_c": 15.0,
+          "ndl_s": null,
+          "tts_s": null,
+          "in_deco": false,
+          "stop_depth_m": null,
+          "stop_time_s": null,
+          "cns": null,
+          "pressure_bar": null
+        }
+      ],
+      "derived": {
+        "computed_max_depth_m": 22.5,
+        "computed_duration_s": 180.0,
+        "computed_mean_depth_m": 13.1,
+        "temperature_range_c": [
+          15.0,
+          15.0
+        ],
+        "deco_spans": [],
+        "deco_time_s": null,
+        "deco_time_s_tolerance_0": null,
+        "gradient_factors": null,
+        "gas_used_l": null,
+        "gas_used_by_cylinder": [],
+        "gas_at": [
+          {
+            "time_s": 0.0,
+            "mix": null
+          },
+          {
+            "time_s": 45.0,
+            "mix": null
+          },
+          {
+            "time_s": 90.0,
+            "mix": null
+          },
+          {
+            "time_s": 135.0,
+            "mix": null
+          },
+          {
+            "time_s": 180.0,
+            "mix": null
+          }
+        ],
+        "title": "#88 · Bubble City",
+        "slate": {
+          "max_depth_ceil_m": 23,
+          "duration_ceil_min": 3,
+          "duration_formatted": [
+            "3",
+            "min"
+          ],
+          "duration_clock": "3:00"
+        }
+      }
+    },
+    {
+      "number": 89,
+      "when": "2026-04-02T09:30:00",
+      "site": "Le Bananier",
+      "buddy": null,
+      "notes": null,
+      "rating": null,
+      "duration_s": 2280.0,
+      "max_depth_m": 11.2,
+      "mean_depth_m": 7.0,
+      "water_temp_c": null,
+      "surface_pressure_bar": null,
+      "salinity_g_l": null,
+      "sac_l_min": null,
+      "otu": null,
+      "cns": null,
+      "computer": "Shearwater Peregrine",
+      "deco_model": null,
+      "tags": [],
+      "cylinders": [],
+      "gas_switches": [],
+      "sample_count": 4,
+      "samples": [
+        {
+          "time_s": 0.0,
+          "depth_m": 0.0,
+          "temp_c": 16.0,
+          "ndl_s": null,
+          "tts_s": null,
+          "in_deco": false,
+          "stop_depth_m": null,
+          "stop_time_s": null,
+          "cns": null,
+          "pressure_bar": null
+        },
+        {
+          "time_s": 60.0,
+          "depth_m": 9.0,
+          "temp_c": 16.0,
+          "ndl_s": null,
+          "tts_s": null,
+          "in_deco": false,
+          "stop_depth_m": null,
+          "stop_time_s": null,
+          "cns": null,
+          "pressure_bar": null
+        },
+        {
+          "time_s": 120.0,
+          "depth_m": 11.2,
+          "temp_c": 16.0,
+          "ndl_s": null,
+          "tts_s": null,
+          "in_deco": false,
+          "stop_depth_m": null,
+          "stop_time_s": null,
+          "cns": null,
+          "pressure_bar": null
+        },
+        {
+          "time_s": 180.0,
+          "depth_m": 3.0,
+          "temp_c": 16.0,
+          "ndl_s": null,
+          "tts_s": null,
+          "in_deco": false,
+          "stop_depth_m": null,
+          "stop_time_s": null,
+          "cns": null,
+          "pressure_bar": null
+        }
+      ],
+      "derived": {
+        "computed_max_depth_m": 11.2,
+        "computed_duration_s": 180.0,
+        "computed_mean_depth_m": 7.0,
+        "temperature_range_c": [
+          16.0,
+          16.0
+        ],
+        "deco_spans": [],
+        "deco_time_s": null,
+        "deco_time_s_tolerance_0": null,
+        "gradient_factors": null,
+        "gas_used_l": null,
+        "gas_used_by_cylinder": [],
+        "gas_at": [
+          {
+            "time_s": 0.0,
+            "mix": null
+          },
+          {
+            "time_s": 45.0,
+            "mix": null
+          },
+          {
+            "time_s": 90.0,
+            "mix": null
+          },
+          {
+            "time_s": 135.0,
+            "mix": null
+          },
+          {
+            "time_s": 180.0,
+            "mix": null
+          }
+        ],
+        "title": "#89 · Le Bananier",
+        "slate": {
+          "max_depth_ceil_m": 12,
+          "duration_ceil_min": 3,
+          "duration_formatted": [
+            "3",
+            "min"
+          ],
+          "duration_clock": "3:00"
+        }
+      }
+    }
+  ]
+}

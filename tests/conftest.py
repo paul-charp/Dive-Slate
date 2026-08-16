@@ -35,3 +35,9 @@ def ssrf_dive(ssrf_log: DiveLog) -> Dive:
 @pytest.fixture
 def uddf_dive(uddf_path: Path) -> Dive:
     return parse_file(uddf_path).only()
+
+
+@pytest.fixture
+def trips_log() -> DiveLog:
+    """A log whose dives are grouped into a trip, plus one that is not."""
+    return parse_file(DATA / "trips.ssrf")

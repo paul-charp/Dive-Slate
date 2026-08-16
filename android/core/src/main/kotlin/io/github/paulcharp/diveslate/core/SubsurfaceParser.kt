@@ -41,7 +41,11 @@ object SubsurfaceParser {
             }
         }
 
-        val dives = root.child("dives")?.children("dive").orEmpty().map { parseDive(it, sites) }
+        // Dives sit either directly under <dives> or inside a <trip>, and a log
+        // can mix both. Matching only the direct children finds nothing at all
+        // in a logbook where every dive belongs to a trip, which produces a log
+        // that parses fine and contains no dives.
+        val dives = root.child("dives")?.findAll("dive").orEmpty().map { parseDive(it, sites) }
         return DiveLog(dives = dives, program = root.attr("program"), source = source, sites = sites)
     }
 
