@@ -61,6 +61,14 @@ HEADER = '''package io.github.paulcharp.diveslate.core
 data class SlateTheme(
     val name: String,
     val mode: String,
+    /**
+     * The background this palette was validated against.
+     *
+     * Never painted — the output is transparent — but a swatch has to show it,
+     * because a palette for dark footage and one for a pale background are not
+     * interchangeable and nothing else about the colours says which is which.
+     */
+    val assumedSurface: Long,
     val ink: Long,
     val inkSecondary: Long,
     val inkMuted: Long,
@@ -108,6 +116,7 @@ def theme_kotlin(name: str, data: dict) -> str:
         f'val {name.upper()}: SlateTheme = SlateTheme(',
         f'    name = "{data["name"]}",',
         f'    mode = "{data["mode"]}",',
+        f'    assumedSurface = 0xFF{data["assumed_surface"].lstrip("#").upper()},',
     ]
     for kotlin_name, json_name in COLOUR_FIELDS:
         lines.append(f"    {kotlin_name} = 0x{argb(data['tokens'][json_name])},")
@@ -138,6 +147,8 @@ def main() -> int:
     for name in sorted(themes):
         parts.append("\n" + theme_kotlin(name, themes[name]) + "\n")
 
+    # Default first, then the rest. The UI groups them by mode rather than
+    # showing one undifferentiated row.
     ordered = ["slate", "light"] + [n for n in sorted(themes) if n not in ("slate", "light")]
     listing = ", ".join(n.upper() for n in ordered)
     parts.append(

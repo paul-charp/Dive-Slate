@@ -37,6 +37,7 @@ class MainActivity : ComponentActivity() {
                 state = state,
                 onLoadSample = { loadBundledSample() },
                 onExport = { slate, background -> exportToInstagram(slate, background) },
+                onSaveToGallery = { slate, title -> saveToGallery(slate, title) },
             )
         }
     }
@@ -104,6 +105,22 @@ class MainActivity : ComponentActivity() {
     private fun describe(e: Exception): String = when (e) {
         is ParseException -> e.message ?: "this file is not a dive log we understand"
         else -> "could not read that file: ${e.message ?: e::class.simpleName}"
+    }
+
+    /**
+     * Save the slate to the gallery as a transparent PNG.
+     *
+     * Separate from the Instagram path on purpose: the PNG is the thing this
+     * project actually produces, and wanting it in an editor — or in any app
+     * other than the one the export button names — is a normal thing to want.
+     */
+    private fun saveToGallery(export: SlateExport, title: String) {
+        state = try {
+            SlateFiles.saveToGallery(this, export, title)
+            state.withMessage("Saved to Pictures/Dive Slate")
+        } catch (e: Exception) {
+            state.withMessage("could not save the PNG: ${e.message ?: e::class.simpleName}")
+        }
     }
 
     /**

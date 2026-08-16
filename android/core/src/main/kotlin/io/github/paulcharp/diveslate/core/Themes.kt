@@ -19,6 +19,14 @@ package io.github.paulcharp.diveslate.core
 data class SlateTheme(
     val name: String,
     val mode: String,
+    /**
+     * The background this palette was validated against.
+     *
+     * Never painted — the output is transparent — but a swatch has to show it,
+     * because a palette for dark footage and one for a pale background are not
+     * interchangeable and nothing else about the colours says which is which.
+     */
+    val assumedSurface: Long,
     val ink: Long,
     val inkSecondary: Long,
     val inkMuted: Long,
@@ -57,6 +65,7 @@ const val CEILING_ARGB: Long = 0xFFD03B3B
 val ABYSS: SlateTheme = SlateTheme(
     name = "abyss",
     mode = "dark",
+    assumedSurface = 0xFF1A1A19,
     ink = 0xFFFFFFFF,
     inkSecondary = 0xFFC3C2B7,
     inkMuted = 0xFF898781,
@@ -80,6 +89,7 @@ val ABYSS: SlateTheme = SlateTheme(
 val INK: SlateTheme = SlateTheme(
     name = "ink",
     mode = "light",
+    assumedSurface = 0xFFFCFCFB,
     ink = 0xFF0B0B0B,
     inkSecondary = 0xFF52514E,
     inkMuted = 0xFF898781,
@@ -103,6 +113,7 @@ val INK: SlateTheme = SlateTheme(
 val LAGOON: SlateTheme = SlateTheme(
     name = "lagoon",
     mode = "dark",
+    assumedSurface = 0xFF1A1A19,
     ink = 0xFFFFFFFF,
     inkSecondary = 0xFFC3C2B7,
     inkMuted = 0xFF898781,
@@ -126,6 +137,7 @@ val LAGOON: SlateTheme = SlateTheme(
 val LIGHT: SlateTheme = SlateTheme(
     name = "light",
     mode = "light",
+    assumedSurface = 0xFFFCFCFB,
     ink = 0xFF0B0B0B,
     inkSecondary = 0xFF52514E,
     inkMuted = 0xFF898781,
@@ -149,6 +161,7 @@ val LIGHT: SlateTheme = SlateTheme(
 val ORCHID: SlateTheme = SlateTheme(
     name = "orchid",
     mode = "dark",
+    assumedSurface = 0xFF1A1A19,
     ink = 0xFFFFFFFF,
     inkSecondary = 0xFFC3C2B7,
     inkMuted = 0xFF898781,
@@ -172,6 +185,7 @@ val ORCHID: SlateTheme = SlateTheme(
 val PAPER: SlateTheme = SlateTheme(
     name = "paper",
     mode = "light",
+    assumedSurface = 0xFFFCFCFB,
     ink = 0xFF0B0B0B,
     inkSecondary = 0xFF52514E,
     inkMuted = 0xFF898781,
@@ -195,6 +209,7 @@ val PAPER: SlateTheme = SlateTheme(
 val REEF: SlateTheme = SlateTheme(
     name = "reef",
     mode = "dark",
+    assumedSurface = 0xFF1A1A19,
     ink = 0xFFFFFFFF,
     inkSecondary = 0xFFC3C2B7,
     inkMuted = 0xFF898781,
@@ -218,6 +233,7 @@ val REEF: SlateTheme = SlateTheme(
 val SLATE: SlateTheme = SlateTheme(
     name = "slate",
     mode = "dark",
+    assumedSurface = 0xFF1A1A19,
     ink = 0xFFFFFFFF,
     inkSecondary = 0xFFC3C2B7,
     inkMuted = 0xFF898781,
@@ -241,6 +257,7 @@ val SLATE: SlateTheme = SlateTheme(
 val TWILIGHT: SlateTheme = SlateTheme(
     name = "twilight",
     mode = "dark",
+    assumedSurface = 0xFF1A1A19,
     ink = 0xFFFFFFFF,
     inkSecondary = 0xFFC3C2B7,
     inkMuted = 0xFF898781,

@@ -13,9 +13,11 @@ android {
 
     defaultConfig {
         applicationId = "io.github.paulcharp.diveslate"
-        // 26 for java.time, which the core uses throughout. Desugaring would
-        // reach further back, but Android 8 is old enough for a dive-log app.
-        minSdk = 26
+        // 29 for scoped storage: saving to the gallery via MediaStore needs
+        // RELATIVE_PATH and IS_PENDING, and the alternative below that is a
+        // runtime permission plus deprecated file APIs. Android 10 is a fair
+        // floor for a phone that also runs Subsurface-mobile and Instagram.
+        minSdk = 29
         targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
