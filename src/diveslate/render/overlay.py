@@ -236,7 +236,6 @@ def render_overlay(
     if overrides:
         opts = replace(opts, **overrides)  # type: ignore[arg-type]
     theme = opts.resolved_theme()
-    mode = "dark" if theme.assumed_surface == "#1a1a19" else "light"
 
     if not dive.samples:
         raise ValueError(

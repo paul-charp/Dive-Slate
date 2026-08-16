@@ -187,6 +187,26 @@ New formats plug in through the `diveslate.parsers` entry-point group.
 diveslate info log.ssrf     # what's in the file
 ```
 
+## Android
+
+`android/` holds a Kotlin reimplementation and a phone app: share a dive out of
+Subsurface-mobile, adjust the slate, and send it to Instagram as a story sticker
+or save it to the gallery as a transparent PNG.
+
+```bash
+cd android && ./gradlew core:test           # no device needed
+cd android && ./gradlew :app:installDebug
+```
+
+The Python here stays canonical. The two are kept in step by `conformance/` —
+fixtures generated from this implementation covering parsed models, every
+derived figure, the unit grammar (including input that must be *refused*), and
+the palettes. The Kotlin tests read those files, so a divergence fails a build
+rather than surfacing months later as a wrong number on a post.
+
+See [android/README.md](android/README.md), and `CLAUDE.md` for the handful of
+places the port deliberately differs.
+
 ## Related
 
 - [Dive-Plan](https://github.com/paul-charp/Dive-Plan) — the planning and
@@ -201,6 +221,15 @@ uv run pytest
 uv run ruff check . && uv run ruff format .
 uv run mypy src
 uv run python .claude/generate-index.py   # refresh the API map
+```
+
+After any deliberate behaviour change, refresh the fixtures the Kotlin port is
+held to — `tests/test_conformance.py` fails until you do:
+
+```bash
+uv run python tools/export_oracle.py
+uv run python tools/export_theme_tokens.py
+uv run python tools/generate_kotlin_themes.py
 ```
 
 `.claude/codebase-index.md` is a generated map of every module and signature —

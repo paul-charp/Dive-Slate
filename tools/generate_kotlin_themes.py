@@ -19,10 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 TOKENS = ROOT / "conformance" / "themes.json"
-OUT = (
-    ROOT
-    / "android/core/src/main/kotlin/io/github/paulcharp/diveslate/core/Themes.kt"
-)
+OUT = ROOT / "android/core/src/main/kotlin/io/github/paulcharp/diveslate/core/Themes.kt"
 
 COLOUR_FIELDS = [
     ("ink", "ink"),
@@ -40,7 +37,7 @@ COLOUR_FIELDS = [
     ("accent", "accent"),
 ]
 
-HEADER = '''package io.github.paulcharp.diveslate.core
+HEADER = """package io.github.paulcharp.diveslate.core
 
 // GENERATED — do not edit by hand.
 // Source: conformance/themes.json, via tools/generate_kotlin_themes.py
@@ -103,7 +100,7 @@ data class SlateTheme(
  * colour that shifts with the theme stops reading as a hazard.
  */
 const val CEILING_ARGB: Long = 0x__CEILING__
-'''
+"""
 
 
 def argb(token: dict) -> str:
@@ -113,10 +110,10 @@ def argb(token: dict) -> str:
 
 def theme_kotlin(name: str, data: dict) -> str:
     lines = [
-        f'val {name.upper()}: SlateTheme = SlateTheme(',
+        f"val {name.upper()}: SlateTheme = SlateTheme(",
         f'    name = "{data["name"]}",',
         f'    mode = "{data["mode"]}",',
-        f'    assumedSurface = 0xFF{data["assumed_surface"].lstrip("#").upper()},',
+        f"    assumedSurface = 0xFF{data['assumed_surface'].lstrip('#').upper()},",
     ]
     for kotlin_name, json_name in COLOUR_FIELDS:
         lines.append(f"    {kotlin_name} = 0x{argb(data['tokens'][json_name])},")
@@ -124,11 +121,11 @@ def theme_kotlin(name: str, data: dict) -> str:
     type_tokens = data["type"]
     alpha = data["scrim_alpha"]
     lines += [
-        f'    fontSize = {type_tokens["font_size"]}f,',
-        f'    titleSize = {type_tokens["title_size"]}f,',
-        f'    labelSize = {type_tokens["label_size"]}f,',
-        f'    scrimAlphaNominal = {alpha["nominal"]}f,',
-        f'    scrimAlphaMin = {alpha["min_for_text"]}f,',
+        f"    fontSize = {type_tokens['font_size']}f,",
+        f"    titleSize = {type_tokens['title_size']}f,",
+        f"    labelSize = {type_tokens['label_size']}f,",
+        f"    scrimAlphaNominal = {alpha['nominal']}f,",
+        f"    scrimAlphaMin = {alpha['min_for_text']}f,",
         ")",
     ]
     return "\n".join(lines)
@@ -149,7 +146,9 @@ def main() -> int:
 
     # Default first, then the rest. The UI groups them by mode rather than
     # showing one undifferentiated row.
-    ordered = ["slate", "light"] + [n for n in sorted(themes) if n not in ("slate", "light")]
+    ordered = ["slate", "light"] + [
+        n for n in sorted(themes) if n not in ("slate", "light")
+    ]
     listing = ", ".join(n.upper() for n in ordered)
     parts.append(
         "\n/** Every palette, default first. */\n"
@@ -157,7 +156,7 @@ def main() -> int:
         "\n"
         "fun slateTheme(name: String): SlateTheme =\n"
         "    SLATE_THEMES.firstOrNull { it.name == name }\n"
-        '        ?: throw IllegalArgumentException(\n'
+        "        ?: throw IllegalArgumentException(\n"
         '            "unknown theme $name; available: " + '
         "SLATE_THEMES.joinToString { it.name }\n"
         "        )\n"
@@ -184,7 +183,9 @@ def main() -> int:
     text = "".join(parts)
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(text, encoding="utf-8", newline="\n")
-    print(f"themes -> {OUT.relative_to(ROOT)}  ({len(text):,} bytes, {len(themes)} palettes)")
+    print(
+        f"themes -> {OUT.relative_to(ROOT)}  ({len(text):,} bytes, {len(themes)} palettes)"
+    )
     for mode in ("dark", "light"):
         print(f"  safe hues {mode}: {slider[mode]['count']}")
     return 0

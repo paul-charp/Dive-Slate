@@ -15,6 +15,12 @@ soften the README's "do not use for real dives" caution.
 Python ≥ 3.14, [uv](https://docs.astral.sh/uv/), `src/` layout — same house style
 as Dive-Plan.
 
+**There are now two implementations.** The Python in `src/` remains canonical
+and is where behaviour is decided. `android/` holds a Kotlin reimplementation
+for a phone app, held to the Python by generated fixtures rather than by
+discipline — see [The Kotlin port](#the-kotlin-port). Change behaviour in Python
+first, regenerate, then follow it in Kotlin.
+
 ## Token-efficient navigation
 
 `.claude/codebase-index.md` is a generated map of every module with class/function
@@ -30,11 +36,19 @@ uv run python .claude/generate-index.py
 
 ```bash
 uv sync                                     # venv + dev deps
-uv run pytest                               # full suite (185 tests)
+uv run pytest                               # full suite (195 tests)
 uv run pytest tests/test_subsurface.py      # one file
 uv run ruff check . && uv run ruff format . # lint + format (line length 88)
 uv run mypy src                             # strict mode is on
 uv run diveslate backends                   # what PNG rasterisers work here
+```
+
+Regenerate the fixtures the Kotlin port is held to, after any behaviour change:
+
+```bash
+uv run python tools/export_oracle.py         # parsed models, derived figures, unit spec
+uv run python tools/export_theme_tokens.py   # palettes + slider ranges
+uv run python tools/generate_kotlin_themes.py  # -> android/.../Themes.kt
 ```
 
 Line endings are LF, enforced via `.gitattributes`.
@@ -58,10 +72,84 @@ registry.py        entry-point discovery (diveslate.parsers, diveslate.themes)
 cli.py             argparse CLI: render, overlay, info, backends
 ```
 
+Outside `src/`:
+
+```
+tools/          exporters that freeze this implementation as fixtures
+conformance/    the generated fixtures — the contract the Kotlin port meets
+android/        the Kotlin reimplementation and the phone app
+```
+
 `profile.py` and `overlay.py` are **siblings, not a base and a variant**. One
 draws a chart you read values off; the other draws a badge. Sharing their layout
 code was tried and abandoned — the constraints genuinely differ, and the
 duplication is smaller than the abstraction would be.
+
+## The Kotlin port
+
+`android/` is an Android app that turns a Subsurface-mobile export into an
+Instagram story in about three taps. Kotlin because the app shell has to be
+Kotlin regardless — share intents, `FileProvider`, `ADD_TO_STORY` — and every
+other choice would have meant Kotlin *plus* something.
+
+```
+android/core/   plain Kotlin/JVM: units, models, both parsers, detection,
+                palettes, and the slate layout. No Android surface, so it
+                builds and tests with only a JDK.
+android/app/    Compose UI, the Canvas painter, intents, MediaStore export.
+```
+
+```bash
+cd android && ./gradlew core:test        # 40 tests, no device needed
+cd android && ./gradlew :app:installDebug
+```
+
+Needs JDK 21 on `JAVA_HOME`. The SDK lives in `%LOCALAPPDATA%\Android\Sdk`;
+Android Studio is **not** required to build. See `android/README.md` for the
+toolchain notes, including that winget's Android Studio package reports success
+without installing anything.
+
+### The fixtures are the contract
+
+`conformance/` is generated from the Python and is what keeps the two honest:
+full parsed models and every derived figure for each log in `tests/data`, a
+table-driven spec for the unit grammar recording **rejected** input as
+deliberately as accepted, the palettes as flat tokens, and synthetic deco
+profiles. `tests/test_conformance.py` re-derives all of it so Python cannot
+drift away unnoticed; the Kotlin tests read the same files.
+
+**When a conformance test fails, fix the Kotlin.** Regenerating to turn a test
+green discards the specification and keeps the bug.
+
+One lesson worth keeping, because it nearly cost the deco fix: **fixtures
+generated from real logs only cover what real logs happen to contain.** Every
+dive in `tests/data` has a single deco span, so none of them can distinguish a
+correct `deco_time_s` from one pairing the first ceiling arrival with the last
+span's end. That case exists only in synthetic profiles, which is why
+`specs.json` carries a `deco_cases` section. Verified by reintroducing the
+defect: the synthetic case failed and every real-log test passed.
+
+### What did not come across
+
+The full chart (`profile.py`), SVG output, canvas placement modes, and the
+entry-point plugin system. The chart is a desktop analysis artifact and the
+sibling split meant the overlay could leave without it.
+
+### Deliberate divergences — do not "restore parity"
+
+- **The XML reader refuses any document declaring a DOCTYPE.** The desktop CLI
+  reads files the user chose; the app is handed documents by other apps. The
+  check is a text scan performed before any parser sees the document, because
+  Android is not Xerces: the Apache hardening feature names *throw* there rather
+  than harden, and `setXIncludeAware` throws outright. A feature flag would have
+  been silently inert on the only platform that needs it.
+- **UDDF deco stops with a missing depth yield null, not NaN.** Python produces
+  NaN there, which survives its own zero-check because NaN is truthy and then
+  poisons every downstream ceiling comparison. Filed separately against Python.
+- **The mix figure is labelled "Gases" and joined with ", "** rather than "Gas"
+  and "/". A slash reads as a ratio beside `GF 70/80`, and `Tx18/45` already
+  contains one.
+- **`minSdk` is 29**, for MediaStore scoped storage.
 
 ## Six things that are easy to break
 

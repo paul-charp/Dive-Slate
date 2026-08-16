@@ -397,9 +397,7 @@ DECO_PROFILES: dict[str, list[tuple[int, float, bool, float | None]]] = {
     # Owing deco throughout and surfacing still owing it: no hang was served.
     "never_reached": _ramp(0, 10, 40.0, True, 6.0),
     # Span left open at the last sample must still close.
-    "surfaces_in_deco": (
-        _ramp(0, 3, 30.0, False, None) + _ramp(3, 8, 6.0, True, 6.0)
-    ),
+    "surfaces_in_deco": (_ramp(0, 3, 30.0, False, None) + _ramp(3, 8, 6.0, True, 6.0)),
 }
 
 
@@ -408,28 +406,30 @@ def deco_cases_json() -> list[dict[str, Any]]:
     cases: list[dict[str, Any]] = []
     for name, rows in DECO_PROFILES.items():
         dive = Dive(samples=tuple(_profile(rows)))
-        cases.append({
-            "name": name,
-            "samples": [
-                {
-                    "time_s": num(minute * 60.0),
-                    "depth_m": num(depth),
-                    "in_deco": deco,
-                    "stop_depth_m": num(ceiling),
-                }
-                for minute, depth, deco, ceiling in rows
-            ],
-            "deco_spans": [
-                {
-                    "start_s": num(span.start_s),
-                    "end_s": num(span.end_s),
-                    "duration_s": num(span.duration_s),
-                }
-                for span in dive.deco_spans()
-            ],
-            "deco_time_s": num(dive.deco_time_s()),
-            "deco_time_s_tolerance_0": num(dive.deco_time_s(tolerance_m=0.0)),
-        })
+        cases.append(
+            {
+                "name": name,
+                "samples": [
+                    {
+                        "time_s": num(minute * 60.0),
+                        "depth_m": num(depth),
+                        "in_deco": deco,
+                        "stop_depth_m": num(ceiling),
+                    }
+                    for minute, depth, deco, ceiling in rows
+                ],
+                "deco_spans": [
+                    {
+                        "start_s": num(span.start_s),
+                        "end_s": num(span.end_s),
+                        "duration_s": num(span.duration_s),
+                    }
+                    for span in dive.deco_spans()
+                ],
+                "deco_time_s": num(dive.deco_time_s()),
+                "deco_time_s_tolerance_0": num(dive.deco_time_s(tolerance_m=0.0)),
+            }
+        )
     return cases
 
 

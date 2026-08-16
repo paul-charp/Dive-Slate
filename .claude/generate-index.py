@@ -11,7 +11,7 @@ repo root after changing public APIs:
 from __future__ import annotations
 
 import ast
-from datetime import date
+from datetime import UTC, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -190,14 +190,20 @@ def emit_module(path: Path, lines: list[str]) -> None:
 
 
 def main() -> None:
+    generated = datetime.now(UTC).date().isoformat()
     lines: list[str] = [
         "# diveslate codebase index",
         "",
-        f"Auto-generated API map (regenerate: `uv run python .claude/generate-index.py`). "
-        f"Generated {date.today().isoformat()}.",
+        (
+            "Auto-generated API map (regenerate: "
+            f"`uv run python .claude/generate-index.py`). Generated {generated}."
+        ),
         "",
-        "Read this instead of source files when you only need signatures/structure. "
-        "Read the actual source before *editing* anything listed here.",
+        (
+            "Read this instead of source files when you only need "
+            "signatures/structure. Read the actual source before *editing* "
+            "anything listed here."
+        ),
     ]
 
     for path in sorted(SRC.rglob("*.py")):

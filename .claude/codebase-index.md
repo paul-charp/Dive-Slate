@@ -313,7 +313,8 @@ Colour and type tokens for the rendered slate.
 # Tests (tests/)
 - `conftest.py` (0 tests)
 - `test_cli.py` (9 tests) — TestRenderCommand, TestInfoCommand, TestBackendsCommand
-- `test_models.py` (27 tests) — TestGasMix, TestDecoSpans, TestDerivedDepth, TestDiveLog, TestTitle, TestDecoTime, TestGradientFactors, TestGasUsed
+- `test_conformance.py` (6 tests)
+- `test_models.py` (29 tests) — TestGasMix, TestDecoSpans, TestDerivedDepth, TestDiveLog, TestTitle, TestDecoTime, TestGradientFactors, TestGasUsed
 - `test_overlay.py` (34 tests) — TestHeading, TestSlate, TestScrim, TestStats, TestGas, TestCeiling, TestEnvelope, TestCanvasPlacement, TestOverlayCli, TestOptions, TestGradientFactors
 - `test_raster.py` (7 tests) — TestRasterisation, TestBackendSelection
 - `test_render.py` (31 tests) — TestSvgDocument, TestLayers, TestThemes, TestScalesAndLayout, TestSvgPrimitives, TestRenderOptions
