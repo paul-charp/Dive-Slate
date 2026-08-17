@@ -16,7 +16,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 /**
- * Holds the model's derived figures to the Python implementation.
+ * Holds the model's derived figures to the recorded fixtures.
  *
  * The dives are rebuilt from the fixture's own sample series rather than by
  * parsing the source log, so this exercises the model in isolation — a failure
@@ -249,7 +249,7 @@ class ModelsConformanceTest {
     /**
      * The synthetic deco profiles, which the real logs cannot stand in for.
      *
-     * Every log in `tests/data` carries a single deco span, so none of them can
+     * Every log in `conformance/data` carries a single deco span, so none of them can
      * tell a correct implementation from one that pairs the first ceiling
      * arrival with the *last* span's end — the defect this project carried until
      * recently. `reincurred` is the case that separates them: two hangs of ten

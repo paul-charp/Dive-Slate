@@ -16,7 +16,8 @@ import kotlin.math.round
  * sentinel zero — a dive with no recorded temperature must not render as a dive
  * at 0 °C. Kotlin makes that convention structural rather than remembered.
  *
- * Ported from `src/diveslate/core/models.py`.
+ * Ported from the retired Python implementation; `conformance/logs/` pins the
+ * parsed shape and every derived figure.
  */
 
 /**

@@ -34,9 +34,9 @@ venv/
 .vscode/
 .idea/
 
-# Rendered output produced while developing — fixtures live in tests/data/.
+# Scratch renders produced while developing. The source logs are committed,
+# under conformance/data/.
 /out/
-*.out.svg
 *.out.png
 
 # Gradle / Kotlin. The wrapper itself is committed; its caches and outputs

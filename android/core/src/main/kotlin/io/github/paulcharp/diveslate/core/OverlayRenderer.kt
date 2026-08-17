@@ -25,7 +25,7 @@ import kotlin.math.roundToInt
  * * **Its own size is the deliverable.** The slate renders at its natural
  *   compact size so it can be dragged around in an editor.
  *
- * Ported from `src/diveslate/render/overlay.py`.
+ * Ported from the retired Python implementation.
  */
 
 enum class SlateLayout { WIDE, TALL }

@@ -20,7 +20,7 @@ import org.w3c.dom.Element
  * waypoint is genuinely absent, not inherited. The one exception is the
  * breathing mix, set by a `<switchmix>` and holding until the next one.
  *
- * Ported from `src/diveslate/parsers/uddf.py`.
+ * Ported from the retired Python implementation.
  */
 object UddfParser {
 

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
 TOKENS = ROOT / "conformance" / "themes.json"
@@ -103,12 +104,13 @@ const val CEILING_ARGB: Long = 0x__CEILING__
 """
 
 
-def argb(token: dict) -> str:
+def argb(token: dict[str, Any]) -> str:
     """`0xAARRGGBB` for a token, as a Kotlin Long literal body."""
-    return token["argb"].lstrip("#").upper()
+    value: str = token["argb"]
+    return value.lstrip("#").upper()
 
 
-def theme_kotlin(name: str, data: dict) -> str:
+def theme_kotlin(name: str, data: dict[str, Any]) -> str:
     lines = [
         f"val {name.upper()}: SlateTheme = SlateTheme(",
         f'    name = "{data["name"]}",',

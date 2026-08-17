@@ -9,15 +9,16 @@ import kotlin.test.fail
 /**
  * Properties of the rendered slate.
  *
- * There is no Python fixture for the drawing operations — the SVG writer emits
- * a document, not a display list, and pinning this port to that markup would be
- * pinning it to the wrong thing. So these assert the properties the layout has
- * to hold, several of which encode decisions CLAUDE.md records as expensive.
+ * There is no recorded fixture for the drawing operations — the original SVG
+ * writer emitted a document, not a display list, and pinning the renderer to
+ * that markup would have been pinning it to the wrong thing. So these assert
+ * the properties the layout has to hold, several of which encode decisions
+ * CLAUDE.md records as expensive.
  */
 class SlateRendererTest {
 
     private val dive: Dive by lazy {
-        val source = File(Fixtures.repoRoot, "tests/data/reference.ssrf")
+        val source = File(Fixtures.repoRoot, "conformance/data/reference.ssrf")
         parseText(source.readText(Charsets.UTF_8), hint = source.name).only()
     }
 

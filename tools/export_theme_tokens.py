@@ -1,6 +1,6 @@
 """Bake the palettes to flat tokens, and the sliders to safe ranges.
 
-``render/palette.py`` is a design-time instrument, not a runtime one. It exists
+``tools/palette.py`` is a design-time instrument, not a runtime one. It exists
 to prove that a palette clears the gates — OKLab ΔE, Machado CVD simulation,
 chroma floor, lightness band, WCAG contrast — and having proved it for the nine
 presets, its job is done. So none of that maths needs to be ported: run it once
@@ -21,16 +21,14 @@ from __future__ import annotations
 
 import json
 import re
-import sys
 from pathlib import Path
 from typing import Any
 
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "src"))
+import theme as theme_mod
+from palette import contrast, validate
+from theme import CEILING, THEMES, Theme, build_theme
 
-from diveslate.render import theme as theme_mod
-from diveslate.render.palette import contrast, validate
-from diveslate.render.theme import CEILING, THEMES, Theme, build_theme
+ROOT = Path(__file__).resolve().parent.parent
 
 OUT = ROOT / "conformance" / "themes.json"
 SCHEMA = 1

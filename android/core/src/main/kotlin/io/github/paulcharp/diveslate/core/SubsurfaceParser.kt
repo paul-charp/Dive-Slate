@@ -15,10 +15,10 @@ import org.w3c.dom.Element
  * this wrong and a 50-minute deco dive parses as one deco sample followed by
  * nothing.
  *
- * `tests/data/reference.ssrf` is the proof: 1930 samples, `in_deco` written
+ * `conformance/data/reference.ssrf` is the proof: 1930 samples, `in_deco` written
  * twice, 1503 samples carrying an obligation.
  *
- * Ported from `src/diveslate/parsers/subsurface.py`.
+ * Ported from the retired Python implementation.
  */
 object SubsurfaceParser {
 

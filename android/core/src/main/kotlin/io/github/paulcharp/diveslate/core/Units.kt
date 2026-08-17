@@ -14,8 +14,9 @@ import kotlin.math.ceil
  *
  * Canonical units: metres, seconds, bar, degrees Celsius, litres.
  *
- * Ported from `src/diveslate/core/units.py`. `conformance/specs.json` pins the
- * behaviour of every function here, rejected input included.
+ * Ported from the Python implementation this project started as, which has
+ * since been removed. `conformance/specs.json` is what survives of it, and it
+ * pins the behaviour of every function here, rejected input included.
  */
 
 /** Raised when a quantity string cannot be understood. */

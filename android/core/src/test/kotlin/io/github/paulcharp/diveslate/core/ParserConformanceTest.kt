@@ -16,7 +16,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 /**
- * Parses the real logs and compares the whole structure against Python.
+ * Parses the real logs and compares the whole structure against the fixtures.
  *
  * This is the test the port stands or falls on. Every sample field is compared
  * individually, which is the only way to catch the failure that matters:
@@ -57,7 +57,7 @@ class ParserConformanceTest {
     }
 
     private fun sourceFor(fixture: JsonObject): File =
-        File(Fixtures.repoRoot, "tests/data/${fixture.getValue("source").jsonPrimitive.content}")
+        File(Fixtures.repoRoot, "conformance/data/${fixture.getValue("source").jsonPrimitive.content}")
 
     @Test
     fun `parsed logs match the oracle field for field`() {
@@ -219,7 +219,7 @@ class ParserConformanceTest {
      */
     @Test
     fun `sparse attributes are carried forward across the series`() {
-        val source = File(Fixtures.repoRoot, "tests/data/reference.ssrf")
+        val source = File(Fixtures.repoRoot, "conformance/data/reference.ssrf")
         if (!source.isFile) return
 
         val text = source.readText(Charsets.UTF_8)
@@ -245,8 +245,8 @@ class ParserConformanceTest {
 
     @Test
     fun `format detection is by content not extension`() {
-        val ssrf = File(Fixtures.repoRoot, "tests/data/sample.ssrf").readText(Charsets.UTF_8)
-        val uddf = File(Fixtures.repoRoot, "tests/data/sample.uddf").readText(Charsets.UTF_8)
+        val ssrf = File(Fixtures.repoRoot, "conformance/data/sample.ssrf").readText(Charsets.UTF_8)
+        val uddf = File(Fixtures.repoRoot, "conformance/data/sample.uddf").readText(Charsets.UTF_8)
 
         // Renamed, misnamed, or nameless — the content decides.
         assertEquals(SubsurfaceParser.FORMAT_NAME, sniff(ssrf).formatName, "ssrf with no hint")

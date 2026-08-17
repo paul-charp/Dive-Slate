@@ -12,7 +12,8 @@ are load-bearing:
    of the light ones.
 2. **Text is haloed.** Every label is painted twice, a wide stroke in
    :attr:`Theme.halo` under a fill in the ink colour, so it survives landing on
-   a background that happens to match it. See ``render/svg.py:text``.
+   a background that happens to match it. The app draws that halo in
+   ``android/core/.../OverlayRenderer.kt``.
 
 The three colour-bearing marks are the depth curve, the deco ceiling and the gas
 switches. They were validated together on the *all-pairs* list — the marks scatter
@@ -40,10 +41,9 @@ to protanopes). If you swap these values, re-run the validation.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
-from typing import Self
+from dataclasses import dataclass
 
-from diveslate.render.palette import (
+from palette import (
     DEFAULT_SURFACE,
     PaletteReport,
     best_in_band,
@@ -61,7 +61,6 @@ __all__ = [
     "THEMES",
     "Theme",
     "build_theme",
-    "get_theme",
     "validate_theme",
 ]
 
@@ -106,10 +105,6 @@ class Theme:
     font_size: float = 13.0
     title_size: float = 20.0
     label_size: float = 11.5
-
-    def with_(self, **changes: object) -> Self:
-        """A copy with tokens overridden — for one-off tweaks from the CLI."""
-        return replace(self, **changes)  # type: ignore[arg-type]
 
 
 #: Default. For compositing onto dark imagery — underwater photos, video.
@@ -186,7 +181,7 @@ def build_theme(
     The base becomes the depth curve — the mark the eye goes to first — after
     being snapped into the mode's lightness band. The area fill is that same
     hue at two alphas. The ceiling stays the fixed status red. Only the gas
-    accent is free, and :func:`~diveslate.render.palette.pick_accent` searches
+    accent is free, and :func:`~palette.pick_accent` searches
     the hue circle for the one that separates best from both, because the right
     accent depends on the base: a hue that sings beside blue can vanish beside
     teal.
@@ -280,22 +275,3 @@ GENERATED: dict[str, Theme] = {
 }
 
 THEMES: dict[str, Theme] = {t.name: t for t in (SLATE, LIGHT)} | GENERATED
-
-
-def get_theme(name: str | Theme) -> Theme:
-    """Resolve a theme by name, checking installed plugins before failing."""
-    if isinstance(name, Theme):
-        return name
-    if name in THEMES:
-        return THEMES[name]
-
-    from diveslate.registry import load_theme
-
-    try:
-        theme = load_theme(name)
-    except LookupError:
-        known = ", ".join(sorted(THEMES))
-        raise LookupError(f"unknown theme {name!r}; available: {known}") from None
-    if not isinstance(theme, Theme):
-        raise TypeError(f"theme {name!r} is not a Theme instance")
-    return theme
