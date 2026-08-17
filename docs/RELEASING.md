@@ -15,6 +15,21 @@ versionCode = 12        // must increase; this is what the updater compares
 versionName = "0.3.1"   // must equal the tag without its leading v
 ```
 
+Write what the release page should say, in `docs/release-notes/<tag>.md`:
+
+```markdown
+# Dive Slate 0.3.1 — what this one is
+
+Prose the reader actually wants…
+```
+
+**The leading `# ` heading becomes the release title, and the rest becomes the
+body**, so one reviewable file in the repo controls all of the public copy. Skip
+the file and the workflow falls back to `--generate-notes`, which lists the
+commits since the last tag — acceptable for a small follow-up, wrong for anything
+anyone reads, because commit subjects here are about signing configs and NUL
+bytes rather than about the app.
+
 Commit, then tag and push:
 
 ```bash

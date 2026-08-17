@@ -185,13 +185,38 @@ jobs:
           path: dist/
           retention-days: 14
 
+      # Notes come from docs/release-notes/<tag>.md when that file exists, and
+      # its leading `# ` heading becomes the release title — so one reviewable
+      # file in the repo controls both, and the public page is written rather
+      # than derived. Without such a file this falls back to --generate-notes,
+      # which lists the commits since the last tag: fine for a small follow-up
+      # release, wrong for anything anyone reads, since commit subjects here are
+      # about signing configs and NUL bytes.
       - name: Publish release
         if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${GITHUB_REF#refs/tags/}" \
-            --title "Dive Slate ${{ steps.version.outputs.name }}" \
-            --generate-notes \
-            --verify-tag \
-            dist/*
+          tag="${GITHUB_REF#refs/tags/}"
+          notes="docs/release-notes/$tag.md"
+          title="Dive Slate ${{ steps.version.outputs.name }}"
+          args=()
+
+          if [ -f "$notes" ]; then
+            if head -1 "$notes" | grep -q '^# '; then
+              title=$(head -1 "$notes" | sed 's/^#[[:space:]]*//')
+              # Body is everything after the heading, with the blank line that
+              # follows it trimmed so the page does not open on whitespace.
+              tail -n +2 "$notes" | sed '/./,$!d' > /tmp/notes.md
+            else
+              cp "$notes" /tmp/notes.md
+            fi
+            args+=(--notes-file /tmp/notes.md)
+            echo "Using $notes for the release body."
+          else
+            args+=(--generate-notes)
+            echo "No $notes — generating notes from commits."
+          fi
+
+          echo "Title: $title"
+          gh release create "$tag" --title "$title" --verify-tag "${args[@]}" dist/*
