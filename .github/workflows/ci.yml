@@ -63,7 +63,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v10
+      # Pinned to an exact patch, unlike every other action here, because
+      # astral-sh/setup-uv publishes no moving major tag — its major tags stop
+      # at v7 while releases are past v10, so `@v10` does not resolve at all.
+      - uses: astral-sh/setup-uv@v10.0.1
         with:
           enable-cache: true
 
