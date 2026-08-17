@@ -86,18 +86,47 @@ gh secret set DIVESLATE_KEY_ALIAS --repo paul-charp/Dive-Slate --body diveslate
 The workflow decodes the keystore into `RUNNER_TEMP`, never into the workspace,
 so nothing archived or packaged can contain it.
 
-**Locally**, for a signed build on your own machine, add to
-`android/local.properties` (gitignored):
+**Locally**, put the same four in `keystore.properties` — gitignored, and looked
+for both at the repository root and beside `android/`:
 
 ```properties
-storeFile=C:/Users/Paul/keys/diveslate.jks
+storeFile=C:/Users/Paul/.android/keys/release.jks
 storePassword=...
-keyAlias=diveslate
+keyAlias=...
 keyPassword=...
 ```
 
-This is optional. Without it `assembleRelease` still produces an installable APK
-signed with the shared debug key, and warns that it did.
+A relative `storeFile` resolves against the properties file that named it, not
+against the app module. `local.properties` is still read, last, but it is the
+worse home for a password: it is also where the SDK path lives, so Android Studio
+owns that file and rewrites it.
+
+The build says which key it used and where the config came from:
+
+```
+Dive Slate: signing release with the key at C:\Users\Paul\.android\keys\release.jks,
+configured by keystore.properties.
+```
+
+All of this is optional. Without it `assembleRelease` still produces an
+installable APK signed with the shared debug key, and warns that it did.
+
+## Reading the signature back
+
+The build config claiming to have signed something is not evidence. The APK is:
+
+```bash
+"$ANDROID_HOME/build-tools/37.0.0/apksigner" verify --print-certs -v android/app/build/outputs/apk/release/app-release.apk
+```
+
+A properly signed build names you in the certificate DN, rather than
+`CN=Android Debug`.
+
+**It is v3-signed only, and that is correct.** v3 is verified from API 28 and
+`minSdk` is 29, so the signer drops the redundant v2 block even though the build
+asks for both. A check asserting v2 specifically fails every good release — the
+workflow made exactly that mistake, and it was caught by verifying a real APK
+rather than by reasoning about it.
 
 ## What a release contains
 

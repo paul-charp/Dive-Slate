@@ -192,7 +192,14 @@ procedure; this is what cost time.
 - **The signing key cannot be replaced.** Android identifies an app by its
   signature, so losing it means no installed copy can ever be updated. It is
   generated outside this repo and `*.jks`, `*.p12`, `*.keystore` are gitignored
-  so a stray copy cannot be committed.
+  so a stray copy cannot be committed. Locally the four values live in
+  `keystore.properties`, not `local.properties` — Android Studio owns the latter
+  and rewrites it.
+- **The release APK is v3-signed only, and that is correct.** v3 is verified from
+  API 28 and `minSdk` is 29, so the signer drops the redundant v2 block even
+  though the build asks for both. A release check asserting "v2 is true" fails
+  every good build; the workflow made that mistake and it was caught by reading a
+  real APK rather than by reasoning about it.
 - **A half-configured signing block fails the build.** Three of the four names
   would otherwise fall through to the debug key and look like success — the same
   reasoning as the derived figures degrading to nothing rather than to a guess.

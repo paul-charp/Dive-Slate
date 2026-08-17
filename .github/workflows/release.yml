@@ -105,10 +105,15 @@ jobs:
             echo "::error::APK is signed with the shared debug key, not the release key."
             exit 1
           fi
-          grep -q "Verified using v2 scheme (APK Signature Scheme v2): true" /tmp/certs.txt || {
-            echo "::error::APK is not v2-signed."
+          # v2 *or* v3, not v2 specifically. minSdk is 29 and v3 is verified from
+          # API 28, so the signer drops the redundant v2 block and a release
+          # built here is v3-only — an assertion naming v2 alone fails every
+          # good APK. Both are checked because which one appears depends on
+          # minSdk, and that is not this check's business.
+          if ! grep -qE "Verified using v(2 scheme \(APK Signature Scheme v2\)|3 scheme \(APK Signature Scheme v3\)): true" /tmp/certs.txt; then
+            echo "::error::APK carries neither a v2 nor a v3 signature."
             exit 1
-          }
+          fi
           echo "Signed by: $(grep -m1 'certificate DN' /tmp/certs.txt || true)"
 
       # A versionCode that did not increase is an update no installed app will
