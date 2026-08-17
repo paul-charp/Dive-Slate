@@ -62,7 +62,12 @@ jobs:
         env:
           DIVESLATE_STORE_FILE: ${{ runner.temp }}/diveslate.jks
           DIVESLATE_STORE_PASSWORD: ${{ secrets.DIVESLATE_STORE_PASSWORD }}
-          DIVESLATE_KEY_ALIAS: ${{ secrets.DIVESLATE_KEY_ALIAS }}
+          # A variable, not a secret: the alias identifies a key, it does not
+          # protect it. As a secret it was masked everywhere in the logs — and
+          # the alias is the word "release", so every step name came out as
+          # "Build signed ***". Redacting a word that appears throughout a
+          # release log costs real legibility and protects nothing.
+          DIVESLATE_KEY_ALIAS: ${{ vars.DIVESLATE_KEY_ALIAS }}
           DIVESLATE_KEY_PASSWORD: ${{ secrets.DIVESLATE_KEY_PASSWORD }}
         run: ./gradlew core:test :app:assembleRelease
 

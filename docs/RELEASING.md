@@ -78,20 +78,31 @@ quietly falling through to the debug key.
 in your `keystore.properties`, plus the keystore itself — which cannot be a
 committed file on a public repo, so it travels as base64 in a secret instead:
 
-| Secret | Value |
-|---|---|
-| `DIVESLATE_KEYSTORE_BASE64` | the `.jks`, base64-encoded |
-| `DIVESLATE_STORE_PASSWORD` | `storePassword` from `keystore.properties` |
-| `DIVESLATE_KEY_PASSWORD` | `keyPassword` from `keystore.properties` |
-| `DIVESLATE_KEY_ALIAS` | `keyAlias` — `release` |
+| | Name | Value |
+|---|---|---|
+| secret | `DIVESLATE_KEYSTORE_BASE64` | the `.jks`, base64-encoded |
+| secret | `DIVESLATE_STORE_PASSWORD` | `storePassword` from `keystore.properties` |
+| secret | `DIVESLATE_KEY_PASSWORD` | `keyPassword` from `keystore.properties` |
+| **variable** | `DIVESLATE_KEY_ALIAS` | `keyAlias` — `release` |
 
 ```powershell
 [Convert]::ToBase64String([IO.File]::ReadAllBytes("$env:USERPROFILE\.android\keys\release.jks")) |
     gh secret set DIVESLATE_KEYSTORE_BASE64 --repo paul-charp/Dive-Slate
 gh secret set DIVESLATE_STORE_PASSWORD --repo paul-charp/Dive-Slate
 gh secret set DIVESLATE_KEY_PASSWORD --repo paul-charp/Dive-Slate
-gh secret set DIVESLATE_KEY_ALIAS --repo paul-charp/Dive-Slate --body release
+gh variable set DIVESLATE_KEY_ALIAS --repo paul-charp/Dive-Slate --body release
 ```
+
+**The alias is a variable, not a secret, and that distinction is not pedantry.**
+It identifies a key rather than protecting it, and GitHub masks every secret value
+wherever it appears in a log — the alias here is the word *release*, so making it
+a secret turned every step name into `Build signed ***` and `Publish ***`.
+Redacting a word that appears throughout a release log costs real legibility and
+protects nothing.
+
+The two passwords hold the same value if the keystore is PKCS12. Set the wrong
+one and the build fails to open the keystore; a missing one fails as
+"half-configured" rather than falling back to the debug key.
 
 A secret cannot be read back afterwards, only overwritten — GitHub shows you the
 name and the date, never the value. Set the wrong one and the symptom is a build
