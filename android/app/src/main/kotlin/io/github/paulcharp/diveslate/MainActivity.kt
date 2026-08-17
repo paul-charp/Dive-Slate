@@ -220,7 +220,7 @@ class MainActivity : ComponentActivity() {
                     append("\n\nit starts with:\n")
                     append(
                         if (text.isBlank()) "(nothing — the file read as empty)"
-                        else text.take(240).replace(' ', '.')
+                        else text.take(240).replace(' ', '.')
                     )
                 }
             )
