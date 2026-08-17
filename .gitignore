@@ -46,3 +46,12 @@ build/
 local.properties
 *.iml
 .kotlin/
+
+# Signing material. The release keystore belongs outside this tree entirely
+# and its passwords never leave your machine — these patterns exist so that a
+# stray copy dropped in here cannot be committed by accident. Losing the key
+# means never being able to update an installed app, so it is backed up
+# somewhere that is not a git repository.
+*.jks
+*.keystore
+keystore.properties
