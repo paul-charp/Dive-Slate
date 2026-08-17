@@ -317,3 +317,9 @@ wanted back, the design that worked was a lightness ramp of one hue ordered by O
 fraction, with every segment labelled — categorical hues are not available,
 because the usable band is too narrow to hold several that clear the gates
 against the curve, the ceiling and each other.
+
+There was also a **generated codebase index** — a map of every module and
+signature, with a section here telling you to read it before opening source. It
+covered the Python that no longer exists, and it is not coming back: the file
+map under [Architecture](#architecture) is the navigation aid now. Don't add
+another one.
