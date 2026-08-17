@@ -171,8 +171,8 @@ object SlatePainter {
      * Rasterise a slate to a transparent bitmap.
      *
      * No background is ever painted. Transparency is the product: the slate is
-     * composited over footage by Instagram, and a bitmap that arrived with an
-     * opaque backing would blank the frame behind it.
+     * composited over footage by whatever the user drops it into, and a bitmap
+     * that arrived with an opaque backing would blank the frame behind it.
      */
     fun toBitmap(slate: Slate, scale: Float = 1f): Bitmap {
         val width = (slate.width * scale).toInt().coerceAtLeast(1)

@@ -100,16 +100,6 @@ fun LoadState.withMessage(message: String): LoadState = when (this) {
 }
 
 /**
- * The story background sent to Instagram when no media is chosen.
- *
- * Bright cyan over near-black, mirroring what actually sits behind a dive
- * overlay: blown-out surface light and deep water. Still exported, but not what
- * the preview shows — see [drawCheckerboard].
- */
-private const val BACKDROP_TOP = 0xFF2BA3C7L
-private const val BACKDROP_BOTTOM = 0xFF04070AL
-
-/**
  * Checkerboard greys.
  *
  * Deliberately light. Beyond indicating transparency, a white-ish backdrop is
@@ -153,7 +143,7 @@ fun DiveSlateApp(
     onLoadSample: () -> Unit,
     onOpenUri: (Uri) -> Unit,
     onBack: () -> Unit,
-    onExport: (SlateExport, Pair<Long, Long>) -> Unit,
+    onExport: (SlateExport) -> Unit,
     onSaveToGallery: (SlateExport, String) -> Unit,
 ) {
     MaterialTheme {
@@ -359,7 +349,7 @@ private fun Editor(
     state: LoadState.Loaded,
     diveIndex: Int,
     onBack: () -> Unit,
-    onExport: (SlateExport, Pair<Long, Long>) -> Unit,
+    onExport: (SlateExport) -> Unit,
     onSaveToGallery: (SlateExport, String) -> Unit,
 ) {
     val log = state.log
@@ -513,9 +503,9 @@ private fun Editor(
         }
 
         // ---- export ---------------------------------------------------------
-        // Saving leads. The PNG is what this project actually produces, and it
-        // is the option that works regardless of which apps are installed;
-        // handing it straight to one particular app is the specialised case.
+        // Saving leads. The PNG is what this project actually produces, and the
+        // gallery is where it stays put; sharing hands the same file to whatever
+        // the user picks from the chooser.
         val export = slate?.let { SlateExport(it, SlateFiles.EXPORT_SCALE) }
 
         Button(
@@ -527,7 +517,7 @@ private fun Editor(
         }
 
         OutlinedButton(
-            onClick = { export?.let { onExport(it, BACKDROP_TOP to BACKDROP_BOTTOM) } },
+            onClick = { export?.let { onExport(it) } },
             enabled = export != null,
             modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
         ) {

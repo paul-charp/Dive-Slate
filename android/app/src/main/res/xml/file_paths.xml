@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
-    <!-- Rendered slates, handed to Instagram as content:// URIs. -->
+    <!-- Rendered slates, handed out as content:// URIs by the share sheet. -->
     <cache-path
         name="slates"
         path="slates/" />

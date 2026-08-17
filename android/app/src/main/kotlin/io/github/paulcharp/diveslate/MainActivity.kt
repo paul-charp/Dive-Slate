@@ -1,5 +1,6 @@
 package io.github.paulcharp.diveslate
 
+import android.content.ClipData
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -18,12 +19,12 @@ import io.github.paulcharp.diveslate.ui.withMessage
 import java.io.File
 
 /**
- * Single activity: receive a dive log, preview the slate, hand it to Instagram.
+ * Single activity: receive a dive log, preview the slate, export it.
  *
- * The flow is deliberately short. From tapping Export in Subsurface-mobile to
- * Instagram opening with the slate in place should be about three taps, so the
- * only decision on the path is which dive — and only when the export holds more
- * than one. Everything else is a setting with a remembered default.
+ * The flow is deliberately short. From tapping Export in Subsurface-mobile to a
+ * finished slate should be about three taps, so the only decision on the path is
+ * which dive — and only when the export holds more than one. Everything else is
+ * a setting with a remembered default.
  */
 class MainActivity : ComponentActivity() {
 
@@ -45,7 +46,7 @@ class MainActivity : ComponentActivity() {
                 onLoadSample = { loadBundledSample() },
                 onOpenUri = { uri -> openPicked(uri) },
                 onBack = { state = LoadState.Empty },
-                onExport = { slate, background -> exportToInstagram(slate, background) },
+                onExport = { slate -> shareSlate(slate) },
                 onSaveToGallery = { slate, title -> saveToGallery(slate, title) },
             )
         }
@@ -249,9 +250,9 @@ class MainActivity : ComponentActivity() {
     /**
      * Save the slate to the gallery as a transparent PNG.
      *
-     * Separate from the Instagram path on purpose: the PNG is the thing this
-     * project actually produces, and wanting it in an editor — or in any app
-     * other than the one the export button names — is a normal thing to want.
+     * Separate from the share path on purpose: the gallery is where the PNG
+     * stays put, and wanting it there rather than immediately handing it to
+     * another app is a normal thing to want.
      */
     private fun saveToGallery(export: SlateExport, title: String) {
         state = try {
@@ -267,15 +268,22 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Hand the slate to Instagram as a story sticker.
+     * Hand the slate to the system share sheet.
      *
-     * Two things here are easy to get wrong and fail silently. The asset URI
-     * travels in an extra, and extras are not walked by the automatic grant that
-     * `addFlags` performs on the intent's data — so the permission is granted
-     * explicitly. And without the `<queries>` entry in the manifest, Android 11+
-     * reports Instagram as absent whether or not it is installed.
+     * Deliberately not addressed to any one app. This used to fire Instagram's
+     * `ADD_TO_STORY` directly, which made the button a bet on which app the
+     * user wanted — and it silently degraded to a chooser anyway whenever
+     * Instagram was absent. A transparent PNG is useful in a video editor, a
+     * message, or a notes app, and the chooser is what lets the user say so.
+     *
+     * The URI travels in an extra, and extras are *not* walked by the automatic
+     * grant that `addFlags` performs on an intent's data. Putting it in
+     * [Intent.setClipData] as well is what actually carries the read permission
+     * to whichever app the user picks; without it the receiver gets a URI it is
+     * not allowed to open, which fails at the far end where it cannot be
+     * diagnosed.
      */
-    private fun exportToInstagram(slate: SlateExport, background: Pair<Long, Long>) {
+    private fun shareSlate(slate: SlateExport) {
         val uri = try {
             SlateFiles.writePng(this, slate)
         } catch (e: Exception) {
@@ -283,34 +291,13 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        val intent = Intent("com.instagram.share.ADD_TO_STORY").apply {
-            setPackage(INSTAGRAM_PACKAGE)
-            putExtra("interactive_asset_uri", uri)
-            putExtra("top_background_color", background.first.asCssColour())
-            putExtra("bottom_background_color", background.second.asCssColour())
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "image/png"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            clipData = ClipData.newUri(contentResolver, "Dive slate", uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
 
-        if (intent.resolveActivity(packageManager) == null) {
-            // Fall back to a plain share so the slate is still usable — and so
-            // the emulator, where Instagram is usually absent, is not a dead end.
-            val fallback = Intent(Intent.ACTION_SEND).apply {
-                type = "image/png"
-                putExtra(Intent.EXTRA_STREAM, uri)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-            state = state.withMessage("Instagram is not installed — sharing the PNG instead")
-            startActivity(Intent.createChooser(fallback, "Share slate"))
-            return
-        }
-
-        grantUriPermission(INSTAGRAM_PACKAGE, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        startActivity(intent)
-    }
-
-    private companion object {
-        const val INSTAGRAM_PACKAGE = "com.instagram.android"
+        startActivity(Intent.createChooser(intent, "Share slate"))
     }
 }
-
-private fun Long.asCssColour(): String = "#%06X".format(this and 0xFFFFFFL)

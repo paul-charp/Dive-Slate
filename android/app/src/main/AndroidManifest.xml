@@ -2,13 +2,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!--
-      Package visibility. Without this, resolveActivity for Instagram returns
-      null on Android 11+ and the app cannot even tell whether it is installed,
-      let alone hand it a sticker.
+      No <queries> block. Sharing goes through the system chooser, which resolves
+      targets on the app's behalf without needing package visibility — the app
+      never asks what is installed, so Android 11+ visibility filtering has
+      nothing to hide from it.
     -->
-    <queries>
-        <package android:name="com.instagram.android" />
-    </queries>
 
     <application
         android:allowBackup="true"
@@ -84,8 +82,9 @@
         </activity>
 
         <!--
-          Exported slates are handed to Instagram as content:// URIs. A file://
-          URI throws FileUriExposedException, so everything goes through here.
+          Exported slates leave the app as content:// URIs, whichever target the
+          user picks from the chooser. A file:// URI throws
+          FileUriExposedException, so everything goes through here.
         -->
         <provider
             android:name="androidx.core.content.FileProvider"

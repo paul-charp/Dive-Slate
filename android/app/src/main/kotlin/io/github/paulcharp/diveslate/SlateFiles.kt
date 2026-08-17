@@ -18,10 +18,11 @@ data class SlateExport(val slate: Slate, val scale: Float)
 object SlateFiles {
 
     /**
-     * Instagram drops a sticker at its own size and lets the viewer pinch from
-     * there, so whatever pixels the PNG has are all it has to work with. Three
-     * times the layout size leaves enough headroom that scaling up does not
-     * soften the type.
+     * Whatever pixels the PNG has are all the receiving app has to work with —
+     * a story editor drops it at its own size and lets the viewer pinch from
+     * there, and a video editor scales it to the timeline. Three times the
+     * layout size leaves enough headroom that scaling up does not soften the
+     * type.
      */
     const val EXPORT_SCALE = 3f
 
