@@ -1,6 +1,7 @@
 #  Runs on every push to main and every pull request, so that a tag is only ever
-#  cut from a tree that has already been seen green. The release workflow does
-#  not re-run these — it builds the same commit CI just checked.
+#  cut from a tree that has already been seen green. The release workflow repeats
+#  core:test rather than trusting that, because nothing stops a tag being pushed
+#  at a commit whose CI went red.
 
 name: CI
 
