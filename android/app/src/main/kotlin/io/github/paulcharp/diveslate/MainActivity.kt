@@ -54,7 +54,7 @@ class MainActivity : ComponentActivity() {
                     state = updateState,
                     onCheck = { checkForUpdate(announce = true) },
                     onDownload = { release -> downloadUpdate(release) },
-                    onInstall = { apk -> installUpdate(apk) },
+                    onInstall = { ready -> installUpdate(ready.release, ready.apk) },
                     onDismiss = { updateState = UpdateState.Idle },
                 ),
                 onLoadSample = { loadBundledSample() },
@@ -348,7 +348,7 @@ class MainActivity : ComponentActivity() {
                     // explicit request and stopping to ask again would be a tap
                     // for nothing. The Install button stays for the case below,
                     // where the first attempt cannot proceed yet.
-                    installUpdate(apk)
+                    installUpdate(release, apk)
                 }
                 .onFailure { e ->
                     updateState = UpdateState.Failed(
@@ -368,14 +368,24 @@ class MainActivity : ComponentActivity() {
      * return trip. Sending them to the right Settings page and saying why is the
      * whole of the handling.
      */
-    private fun installUpdate(apk: File) {
+    private fun installUpdate(release: UpdateCheck.Release, apk: File) {
+        // Reported through updateState, never through the load state. Anything
+        // routed via LoadState.withMessage becomes LoadState.Failed unless a log
+        // is already open, which would replace the whole screen with the "that
+        // did not load" page over a message about an install.
         if (!UpdateCheck.canInstall(this)) {
-            state = state.withMessage("Allow Dive Slate to install apps, then tap Install again")
+            updateState = UpdateState.Ready(
+                release,
+                apk,
+                note = "Allow Dive Slate to install apps, then tap Install again",
+            )
             runCatching { startActivity(UpdateCheck.unknownSourcesSettings(this)) }
                 .onFailure {
-                    state = state.withMessage(
-                        "This phone has no page for allowing installs from an app, " +
-                            "so the APK has to be opened from your files instead",
+                    updateState = UpdateState.Ready(
+                        release,
+                        apk,
+                        note = "This phone offers no page for allowing installs from " +
+                            "an app, so the APK has to be opened from your files",
                     )
                 }
             return

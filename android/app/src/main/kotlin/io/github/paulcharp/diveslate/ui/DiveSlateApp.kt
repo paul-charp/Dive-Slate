@@ -116,7 +116,17 @@ sealed interface UpdateState {
     data object UpToDate : UpdateState
     data class Available(val release: UpdateCheck.Release) : UpdateState
     data class Downloading(val release: UpdateCheck.Release, val fraction: Float) : UpdateState
-    data class Ready(val release: UpdateCheck.Release, val apk: File) : UpdateState
+    /**
+     * Downloaded and verified. [note] replaces the default explanation when the
+     * install could not be started yet — almost always because permission to
+     * install from this app has not been granted, which is a detour rather than
+     * a failure, so the state stays Ready and keeps its button.
+     */
+    data class Ready(
+        val release: UpdateCheck.Release,
+        val apk: File,
+        val note: String? = null,
+    ) : UpdateState
     data class Failed(val message: String) : UpdateState
 }
 
@@ -125,7 +135,9 @@ data class Updates(
     val state: UpdateState,
     val onCheck: () -> Unit,
     val onDownload: (UpdateCheck.Release) -> Unit,
-    val onInstall: (File) -> Unit,
+    // The whole state, so the installer never has to look up which release the
+    // file on disk belongs to.
+    val onInstall: (UpdateState.Ready) -> Unit,
     val onDismiss: () -> Unit,
 )
 
@@ -362,11 +374,11 @@ private fun UpdateBanner(updates: Updates, modifier: Modifier = Modifier) {
                     // first time, in Settings, and there is no way to prompt for
                     // it inline — so say what is about to happen instead of
                     // letting the installer appear to do nothing.
-                    detail = "Android will ask you to confirm the install",
+                    detail = state.note ?: "Android will ask you to confirm the install",
                     onDismiss = updates.onDismiss,
                 )
                 Button(
-                    onClick = { updates.onInstall(state.apk) },
+                    onClick = { updates.onInstall(state) },
                     modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
                 ) {
                     Text("Install")
