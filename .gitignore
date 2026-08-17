@@ -54,4 +54,5 @@ local.properties
 # somewhere that is not a git repository.
 *.jks
 *.keystore
+*.p12
 keystore.properties
