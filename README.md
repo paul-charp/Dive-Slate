@@ -11,11 +11,6 @@ behind the corners is this page.*
 Share a dive out of Subsurface-mobile, pick a palette, and save it to your
 gallery or send it wherever you want it. About three taps end to end.
 
-> [!WARNING]
-> **Experimental software. Do not use it for real dives.** Dive Slate draws what
-> a log file already contains — it does not plan, validate or verify anything.
-> Nothing it renders should inform a decision in the water.
-
 ## The app
 
 | Wide | Tall |

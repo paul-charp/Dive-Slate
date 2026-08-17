@@ -7,8 +7,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Dive Slate is an **Android app**. It reads a Subsurface (`.ssrf`) or UDDF
 (`.uddf`) dive log and renders the profile as a compact **transparent slate** —
 a badge to drop over a photo or a video frame, saved to the gallery as a PNG or
-handed to the system share sheet. Experimental software; never soften the
-README's "do not use for real dives" caution.
+handed to the system share sheet.
+
+**The README carries no dive-safety warning, and that is deliberate — do not
+add one back.** It did while this was part of a planning stack, and the wording
+was inherited from there. This app reads a log of a dive that already happened
+and draws a picture of it. It plans nothing, computes no decompression, and
+produces nothing anyone acts on in the water, so a "do not use for real dives"
+caution described a use that does not exist.
 
 The app is the only product. The Kotlin in `android/` is canonical and is where
 behaviour is decided.
