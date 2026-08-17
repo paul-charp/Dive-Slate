@@ -4,140 +4,132 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-`diveslate` reads a Subsurface (`.ssrf`) or UDDF (`.uddf`) dive log and renders
-the profile as a **transparent image** — SVG always, PNG through an optional
-rasteriser. Two outputs: a compact *overlay slate* for Instagram posts and
-stories, and a full *chart*. It is the rendering half of the user's diving stack;
-[Dive-Plan](https://github.com/paul-charp/Dive-Plan) is the planning half and its
-`subsurface` formatter emits logs this renders. Experimental software; never
-soften the README's "do not use for real dives" caution.
+Dive Slate is an **Android app**. It reads a Subsurface (`.ssrf`) or UDDF
+(`.uddf`) dive log and renders the profile as a compact **transparent slate** —
+a badge to drop over a photo or a video frame, saved to the gallery as a PNG or
+handed to the system share sheet. Experimental software; never soften the
+README's "do not use for real dives" caution.
 
-Python ≥ 3.14, [uv](https://docs.astral.sh/uv/), `src/` layout — same house style
-as Dive-Plan.
+The app is the only product. The Kotlin in `android/` is canonical and is where
+behaviour is decided.
 
-**There are now two implementations.** The Python in `src/` remains canonical
-and is where behaviour is decided. `android/` holds a Kotlin reimplementation
-for a phone app, held to the Python by generated fixtures rather than by
-discipline — see [The Kotlin port](#the-kotlin-port). Change behaviour in Python
-first, regenerate, then follow it in Kotlin.
+**There is a small amount of Python, and it is design-time only.** `tools/` holds
+the colour maths and the scripts that bake it into `Themes.kt`. It does not ship,
+it does not run on a phone, and it is not a second implementation of anything.
 
-## Token-efficient navigation
-
-`.claude/codebase-index.md` is a generated map of every module with class/function
-signatures and docstring one-liners. **Read it first instead of source files**
-when you need to know what exists or where it lives. Only read actual source
-before editing it. Regenerate after changing public APIs:
-
-```bash
-uv run python .claude/generate-index.py
+```
+android/       the app. core/ is plain Kotlin/JVM and builds with only a JDK;
+               app/ is Compose, the Canvas painter, intents, MediaStore export.
+conformance/   the fixtures core/ is tested against, plus data/ — the source
+               logs they describe.
+tools/         Python. Palette maths and the generators for Themes.kt.
 ```
 
 ## Commands
 
 ```bash
-uv sync                                     # venv + dev deps
-uv run pytest                               # full suite (195 tests)
-uv run pytest tests/test_subsurface.py      # one file
-uv run ruff check . && uv run ruff format . # lint + format (line length 88)
-uv run mypy src                             # strict mode is on
-uv run diveslate backends                   # what PNG rasterisers work here
+cd android && ./gradlew core:test          # 40 tests, no device needed
+cd android && ./gradlew :app:installDebug
+cd android && ./gradlew :app:assembleRelease
 ```
 
-Regenerate the fixtures the Kotlin port is held to, after any behaviour change:
+Needs JDK 21 on `JAVA_HOME`, and the SDK, which lives in
+`%LOCALAPPDATA%\Android\Sdk` — export `ANDROID_HOME` or set `sdk.dir` in
+`android/local.properties` (gitignored, so a fresh clone has neither and the app
+module fails with "SDK location not found" until one is provided; `core:test`
+does not need it).
+
+Setting the toolchain up on Windows was awkward and the failures were silent, so
+for the record:
+
+- **winget's `Google.AndroidStudio` reports `Successfully installed` and exits 0
+  without installing anything.** Verify with `winget list`, never the exit code.
+- Anything needing elevation failed in this environment. The SDK was therefore
+  installed via the command-line tools rather than Studio.
+- Android Studio is **not** required to build. It is only needed for the IDE and
+  the emulator GUI.
+- `sdkmanager` prints a deprecation notice pointing at an `android` CLI whose
+  installer fails with access-denied here. The notice can be ignored.
+
+Python, after any palette change:
 
 ```bash
-uv run python tools/export_oracle.py         # parsed models, derived figures, unit spec
-uv run python tools/export_theme_tokens.py   # palettes + slider ranges
+uv sync
+uv run python tools/export_theme_tokens.py     # palettes + slider ranges
 uv run python tools/generate_kotlin_themes.py  # -> android/.../Themes.kt
+uv run pytest                                  # 3 tests: the baked tokens still match the maths
+uv run ruff check . && uv run ruff format .    # line length 88
+uv run mypy tools                              # strict mode is on
 ```
 
 Line endings are LF, enforced via `.gitattributes`.
 
 ## Architecture
 
-Imports flow strictly downward; `core/` never imports from upper layers.
-
 ```
-core/units.py      quantity-string parsing → canonical units; ceiling rounding
-core/models.py     Dive, Sample, GasMix, Cylinder, GasSwitch, DiveLog (frozen, slots)
-parsers/           subsurface.py, uddf.py, detect.py (content sniffing), base.py
-render/palette.py  OKLab/OKLCH maths, CVD simulation, the palette gates
-render/theme.py    Theme tokens; hand-built SLATE/LIGHT + seven generated presets
-render/layout.py   Scale, Margins, Layout, tick selection        ─┐ chart only
-render/profile.py  the full chart                                ─┘
-render/overlay.py  the compact slate (wide + tall layouts)
-render/svg.py      dependency-free SVG writer
-render/raster.py   pluggable SVG→PNG backends
-registry.py        entry-point discovery (diveslate.parsers, diveslate.themes)
-cli.py             argparse CLI: render, overlay, info, backends
-```
+android/core/
+  Units.kt            quantity-string parsing → canonical units; ceiling rounding
+  Models.kt           Dive, Sample, GasMix, Cylinder, GasSwitch, DiveLog
+  SubsurfaceParser.kt  UddfParser.kt  Detect.kt (content sniffing)
+  Xml.kt              DOM wrapper; refuses any document declaring a DOCTYPE
+  Themes.kt           generated — nine palettes as constants, do not hand-edit
+  Slate.kt            the display list core emits
+  OverlayRenderer.kt  the slate layout (wide + tall)
 
-Outside `src/`:
+android/app/
+  MainActivity.kt     share intake, the intent handling described below
+  SlatePainter.kt     paints core's display list onto a Canvas
+  SlateFiles.kt       MediaStore export, FileProvider
+  ui/DiveSlateApp.kt  Compose UI
 
-```
-tools/          exporters that freeze this implementation as fixtures
-conformance/    the generated fixtures — the contract the Kotlin port meets
-android/        the Kotlin reimplementation and the phone app
+tools/
+  palette.py          OKLab/OKLCH maths, CVD simulation, the palette gates
+  theme.py            Theme tokens; hand-built SLATE/LIGHT + seven generated
+  export_theme_tokens.py, generate_kotlin_themes.py
+  test_themes.py      the three tests that guard the generated tokens
 ```
 
-`profile.py` and `overlay.py` are **siblings, not a base and a variant**. One
-draws a chart you read values off; the other draws a badge. Sharing their layout
-code was tried and abandoned — the constraints genuinely differ, and the
-duplication is smaller than the abstraction would be.
+`core` emits the slate as a **display list**, not as pixels, and `app` merely
+paints it. That split is what makes the interesting code testable without a
+device — including all of the geometry.
 
-## The Kotlin port
+## The fixtures are the contract
 
-`android/` is an Android app that turns a Subsurface-mobile export into an
-Instagram story in about three taps. Kotlin because the app shell has to be
-Kotlin regardless — share intents, `FileProvider`, `ADD_TO_STORY` — and every
-other choice would have meant Kotlin *plus* something.
+`conformance/` is what `core:test` is held to: full parsed models and every
+derived figure for each log in `conformance/data`, a table-driven spec for the
+unit grammar recording **rejected** input as deliberately as accepted, the
+palettes as flat tokens, and synthetic deco profiles.
 
-```
-android/core/   plain Kotlin/JVM: units, models, both parsers, detection,
-                palettes, and the slate layout. No Android surface, so it
-                builds and tests with only a JDK.
-android/app/    Compose UI, the Canvas painter, intents, MediaStore export.
-```
+These files were **generated from a Python implementation that no longer
+exists** (see [History](#history-worth-knowing)). Nothing regenerates them now —
+they are maintained by hand. That changes what a failure means:
 
-```bash
-cd android && ./gradlew core:test        # 40 tests, no device needed
-cd android && ./gradlew :app:installDebug
-```
+**When a conformance test fails, fix the code.** Editing a fixture is a decision
+about what the behaviour should be, and it should be made as deliberately as
+that sounds. It is never a way to turn a red test green.
 
-Needs JDK 21 on `JAVA_HOME`. The SDK lives in `%LOCALAPPDATA%\Android\Sdk`;
-Android Studio is **not** required to build. See `android/README.md` for the
-toolchain notes, including that winget's Android Studio package reports success
-without installing anything.
-
-### The fixtures are the contract
-
-`conformance/` is generated from the Python and is what keeps the two honest:
-full parsed models and every derived figure for each log in `tests/data`, a
-table-driven spec for the unit grammar recording **rejected** input as
-deliberately as accepted, the palettes as flat tokens, and synthetic deco
-profiles. `tests/test_conformance.py` re-derives all of it so Python cannot
-drift away unnoticed; the Kotlin tests read the same files.
-
-**When a conformance test fails, fix the Kotlin.** Regenerating to turn a test
-green discards the specification and keeps the bug.
+The exception is `conformance/themes.json`, which *is* still generated — by
+`tools/export_theme_tokens.py`, and `tools/test_themes.py` fails until you
+regenerate after a palette change.
 
 **A green Kotlin run is only meaningful if the task actually ran.** The fixtures
 live outside the Gradle project, so for a while changing them left `core:test`
 reported UP-TO-DATE — the suite whose whole job is noticing when fixtures and
 code disagree was skipping itself precisely when they had just been made to
-disagree. `conformance/` and `tests/data` are declared as test inputs now. If
-that declaration is ever removed, a stale pass looks identical to a real one;
-`--rerun-tasks` is the way to check when a result seems too good.
+disagree. `conformance/` is declared as a test input now. If that declaration is
+ever removed, a stale pass looks identical to a real one; `--rerun-tasks` is the
+way to check when a result seems too good.
 
 One lesson worth keeping, because it nearly cost the deco fix: **fixtures
 generated from real logs only cover what real logs happen to contain.** Every
-dive in `tests/data` has a single deco span, so none of them can distinguish a
-correct `deco_time_s` from one pairing the first ceiling arrival with the last
-span's end. That case exists only in synthetic profiles, which is why
-`specs.json` carries a `deco_cases` section. Verified by reintroducing the
-defect: the synthetic case failed and every real-log test passed.
+dive in `conformance/data` has a single deco span, so none of them can
+distinguish a correct `decoTimeSeconds` from one pairing the first ceiling
+arrival with the last span's end. That case exists only in synthetic profiles,
+which is why `specs.json` carries a `deco_cases` section. Verified by
+reintroducing the defect: the synthetic case failed and every real-log test
+passed.
 
-### How a dive log actually arrives
+## How a dive log actually arrives
 
 Established by installing Subsurface-mobile in an emulator and watching what its
 export fires, because none of it is documented and every guess was wrong:
@@ -172,48 +164,27 @@ cloud cache *is* readable, at `%APPDATA%\Subsurface\cloudstorage` — a git
 working tree of per-dive text files. That is how the format was inspected; it
 has no bearing on the phone.)
 
-### What did not come across
-
-The full chart (`profile.py`), SVG output, canvas placement modes, and the
-entry-point plugin system. The chart is a desktop analysis artifact and the
-sibling split meant the overlay could leave without it.
-
-### Deliberate divergences — do not "restore parity"
-
-- **The XML reader refuses any document declaring a DOCTYPE.** The desktop CLI
-  reads files the user chose; the app is handed documents by other apps. The
-  check is a text scan performed before any parser sees the document, because
-  Android is not Xerces: the Apache hardening feature names *throw* there rather
-  than harden, and `setXIncludeAware` throws outright. A feature flag would have
-  been silently inert on the only platform that needs it.
-- **UDDF deco stops with a missing depth yield null, not NaN.** Python produces
-  NaN there, which survives its own zero-check because NaN is truthy and then
-  poisons every downstream ceiling comparison. Filed separately against Python.
-- **The mix figure is labelled "Gases" and joined with ", "** rather than "Gas"
-  and "/". A slash reads as a ratio beside `GF 70/80`, and `Tx18/45` already
-  contains one.
-- **`minSdk` is 29**, for MediaStore scoped storage.
-
-## Seven things that are easy to break
+## Six things that are easy to break
 
 ### 1. Subsurface samples are sparse
 
 Subsurface writes a sample attribute **only when it changes**. A line carrying
 just a time and depth means "everything else is as it was", not "everything else
-is unknown". `_parse_samples` carries every optional field forward, exactly as
+is unknown". `parseSamples` carries every optional field forward, exactly as
 Subsurface's own reader does. Break this and a 50-minute deco dive parses as one
-deco sample followed by nothing. `tests/test_subsurface.py::TestCarryForward`
-guards it — those tests are the specification, not incidental coverage.
+deco sample followed by nothing. `conformance/data/reference.ssrf` is the proof:
+1930 samples, `in_deco` written twice, 1503 samples carrying an obligation —
+`ParserConformanceTest` asserts exactly that.
 
 UDDF is the opposite: waypoints are self-contained and nothing carries forward
 except the breathing mix.
 
 ### 2. Deco time is the hang, not the obligation
 
-`Dive.deco_time_s()` measures from first reaching the ceiling on the way up until
-the obligation clears. `Dive.deco_spans()` measures when deco was *owed*, which
-starts while the diver is still on the bottom. On the reference dive these are
-23:20 and 50:06. Reporting the second as "deco" claims fifty minutes of stops
+`Dive.decoTimeSeconds()` measures from first reaching the ceiling on the way up
+until the obligation clears. `Dive.decoSpans()` measures when deco was *owed*,
+which starts while the diver is still on the bottom. On the reference dive these
+are 23:20 and 50:06. Reporting the second as "deco" claims fifty minutes of stops
 that never happened — that bug shipped once and was caught by the user.
 
 A dive that clears deco and re-incurs it served **two** hangs. Each span is
@@ -224,9 +195,14 @@ surfacing in deco after an earlier stop still reports that stop.
 
 ### 3. The colour palettes are computed, not chosen
 
-`render/palette.py` implements the data-viz gates — OKLab ΔE, Machado CVD
+`tools/palette.py` implements the data-viz gates — OKLab ΔE, Machado CVD
 simulation at severity 1.0, chroma floor, lightness band, WCAG contrast — and
 `build_theme` **raises** rather than returning a palette that fails them.
+
+This runs at design time and the app ships the answers. `Themes.kt` is
+**generated** — hand-editing it puts the shipped colours out of step with the
+maths that justified them, and `tools/test_themes.py` will not catch it, because
+that test compares the maths to `themes.json`, not to the Kotlin.
 
 Two findings that are not obvious and cost real debugging:
 
@@ -237,7 +213,7 @@ Two findings that are not obvious and cost real debugging:
   silently desaturates cyan below the chroma floor. `best_in_band` sweeps for the
   lightness where a hue holds the most chroma.
 
-The ceiling red (`theme.CEILING`) is deliberately **not** themed: a hazard colour
+The ceiling red (`CEILING_ARGB`) is deliberately **not** themed: a hazard colour
 that shifts with the palette stops reading as a hazard.
 
 Where a mark sits below 3:1 contrast, it is legal **only** because a text label
@@ -246,37 +222,32 @@ labels to reduce clutter.
 
 ### 4. Transparency is the product
 
-No background rect is ever emitted, and rasteriser backends are configured for a
-transparent canvas explicitly. Because the backdrop is unknown at render time,
-all text is painted twice — a halo stroke under the fill (`render/svg.py:text`) —
-and the overlay adds a scrim panel, since halos alone are not enough over video
-where the frame behind a label changes constantly.
+No background is ever painted. Because the backdrop is unknown at render time,
+all text is drawn twice — a halo stroke under the fill — and the slate adds a
+scrim panel, since halos alone are not enough over video where the frame behind
+a label changes constantly.
 
-### 5. skia is not a rasteriser backend
+The opacity control moves the scrim and nothing else, clamped to a per-theme
+floor computed from ink contrast against the worst possible backdrop. Fading the
+marks would void the contrast the gates enforce and turn the hazard red into a
+pink suggestion. Two tests hold that line.
 
-`skia-python` installs cleanly, is fast, and renders **none** of the SVG text —
-its `SVGDOM` exposes no font-manager hook, so the output is a clean-looking chart
-silently missing its title, labels and stats. It was removed deliberately and
-must never be added to the fallback chain. `available_backends()` proves each
-candidate on a real render rather than trusting `find_spec`, because cairosvg
-imports fine and then fails on a missing shared library.
+### 5. Derived figures must degrade to nothing, never to a guess
 
-### 6. Derived figures must degrade to nothing, never to a guess
-
-`gradient_factors` matches a pattern in a free-text label and validates the
+`gradientFactors` matches a pattern in a free-text label and validates the
 result (1–100, low ≤ high) — a VPM-B dive has no GFs and must not appear to have
-them. `gas_used_l` needs size *and* both pressures, and drops a cylinder that
-came back fuller rather than subtracting it. `deco_time_s` returns `None` when
+them. `gasUsedLitres` needs size *and* both pressures, and drops a cylinder that
+came back fuller rather than subtracting it. `decoTimeSeconds` returns null when
 the ceiling was never reached.
 
-### 7. Subsurface nests dives inside trips
+### 6. Subsurface nests dives inside trips
 
 A dive is a child of `<dives>` **or** of a `<trip>` inside it, and one log mixes
 both. Matching `dives/dive` finds only the ungrouped ones, so a logbook where
 every dive belongs to a trip parses perfectly and yields nothing — which
 surfaces as "this log contains no dives" against a file that is plainly full of
 them. Both parsers search at any depth under `<dives>`;
-`tests/data/trips.ssrf` guards it.
+`conformance/data/trips.ssrf` guards it.
 
 This shipped because every fixture was ungrouped: the reference dive was
 exported alone, and dives added by hand in an emulator have no trip. A corpus
@@ -284,20 +255,54 @@ assembled from convenient exports had a shape no real logbook has. Worth
 remembering when adding fixtures — real data covers what real data happens to
 contain, which is the same lesson the synthetic deco profiles teach.
 
+## Deliberate divergences — do not "restore parity"
+
+Choices that departed from the original Python implementation. It is gone, but
+the fixtures still encode its behaviour, so these remain worth recording.
+
+- **The XML reader refuses any document declaring a DOCTYPE.** The desktop tool
+  read files the user chose; the app is handed documents by other apps. The
+  check is a text scan performed before any parser sees the document, because
+  Android is not Xerces: the Apache hardening feature names *throw* there rather
+  than harden, and `setXIncludeAware` throws outright. A feature flag would have
+  been silently inert on the only platform that needs it.
+- **UDDF deco stops with a missing depth yield null, not NaN.** The Python
+  produced NaN there, which survived its own zero-check because NaN is truthy
+  and then poisoned every downstream ceiling comparison.
+- **The mix figure is labelled "Gases" and joined with ", "** rather than "Gas"
+  and "/". A slash reads as a ratio beside `GF 70/80`, and `Tx18/45` already
+  contains one.
+- **`minSdk` is 29**, for MediaStore scoped storage.
+
 ## Conventions
 
-- Optional log fields are `None`, never a sentinel zero — a dive with no recorded
+- Optional log fields are null, never a sentinel zero — a dive with no recorded
   temperature must not render as a dive at 0 °C.
 - **Never add a second y-axis.** Temperature, pressure and consumption go in the
   summary; depth is the only thing mapped to vertical space.
 - The depth axis always starts at the surface.
-- Slate figures round **up** — 44.4 m is a 45 m dive (`ceil_metres`,
-  `ceil_minutes`). The chart keeps decimals, because its axis would contradict a
-  rounded headline.
-- New log formats plug in via the `diveslate.parsers` entry-point group;
-  detection is by content, not file extension.
+- Slate figures round **up** — 44.4 m is a 45 m dive (`ceilMetres`,
+  `ceilMinutes`).
 
 ## History worth knowing
+
+**This began as a Python desktop CLI** that rendered SVG and PNG charts, and for
+a while the Kotlin was a port held to it. The Python was removed once the app
+became the only intended product. What it earned survives as `conformance/` —
+the fixtures are the record of its behaviour, which is why they are treated as a
+specification rather than as a snapshot.
+
+Removed with it, and **not** worth reviving unless the desktop returns: the full
+chart (axes, grid, legend, summary strip), SVG output, canvas placement modes,
+the rasteriser backends, and an entry-point plugin system for parsers and themes.
+The chart was a desktop analysis artifact; the slate is a badge. Sharing their
+layout code was tried and abandoned once already — the constraints genuinely
+differ.
+
+One trap from that era, recorded in case PNG rasterisation is ever wanted again:
+**skia-python installs cleanly, is fast, and renders none of the SVG text.** Its
+`SVGDOM` exposes no font-manager hook, so the output was a clean-looking chart
+silently missing its title, labels and stats.
 
 A **gas ribbon** (a segmented bar under the profile showing which mix was
 breathed when) was built and then removed at the user's request. If it is ever

@@ -1,101 +1,58 @@
-# Dive-Slate
+# Dive Slate
 
-Turn a dive log into a transparent image of the profile — a compact slate to
-drop over a photo or video, or a full chart.
+An Android app that turns a dive log into a **transparent slate** — a compact
+badge of your profile to drop over a photo or video.
 
-Point it at a **Subsurface** (`.ssrf`) or **UDDF** (`.uddf`) log and it draws the
-depth-vs-time curve with the things a diver actually wants: max depth, runtime,
-decompression, gradient factors, gas. The background is transparent, so the
-result drops straight onto an Instagram post, a story, a log-book page or a
-video overlay.
+![The exported slate](docs/images/slate.png)
 
-```bash
-diveslate overlay divetest.ssrf -o slate.png            # the badge
-diveslate render  divetest.ssrf -o profile.png          # the full chart
-```
+*The actual export: a transparent PNG, 3240×1404, no background. What you see
+behind the corners is this page.*
+
+Share a dive out of Subsurface-mobile, pick a palette, and save it to your
+gallery or send it wherever you want it. About three taps end to end.
 
 > [!WARNING]
-> **Experimental software. Do not use it for real dives.** Dive-Slate draws what
+> **Experimental software. Do not use it for real dives.** Dive Slate draws what
 > a log file already contains — it does not plan, validate or verify anything.
 > Nothing it renders should inform a decision in the water.
 
-## Install
+## The app
 
-```bash
-pip install diveslate
-```
+| Wide | Tall |
+|---|---|
+| ![Wide layout](docs/images/app-wide.png) | ![Tall layout](docs/images/app-tall.png) |
 
-The core renders **SVG using the standard library alone** — no native
-dependencies, nothing to compile. PNG output needs a rasteriser:
+The preview sits on a checkerboard because the output has no background — that
+is the product, and a solid backdrop would hide the one property that matters.
 
-```bash
-pip install "diveslate[png]"
-```
+Takes a **Subsurface** (`.ssrf`) or **UDDF** (`.uddf`) log — shared in from
+Subsurface-mobile, picked out of your files, or the bundled sample — lists the
+dives newest first, then previews the chosen one and exports it. A single-dive
+log skips the list.
 
-That pulls in [resvg](https://github.com/linebender/resvg), which ships
-self-contained wheels on Windows, macOS and Linux and renders SVG text properly.
-If you already have a system cairo, `diveslate[cairo]` works too. To see what
-your machine can actually do:
+The slate itself is a profile silhouette, the site name, and a few big numbers.
+No axes and no legend: at a third of frame width on a phone those are unreadable
+noise rather than information.
 
-```bash
-diveslate backends
-```
+Adjustable: palette, wide or tall layout, which elements appear, which figures
+are shown, and the scrim panel's opacity.
 
-## The two outputs
+**The opacity control moves the panel and nothing else.** Ink is never faded, and
+the slider is clamped to a per-theme floor computed from ink contrast against the
+worst possible backdrop. Fading the marks would void the contrast the palette
+gates enforce and turn the deliberately-unthemed hazard red into a pink
+suggestion.
 
-### `overlay` — a badge for a post or a story
+**Save to gallery** writes the transparent PNG to Pictures › Dive Slate,
+confirmed with a snackbar because a MediaStore write is otherwise silent and
+lands in an album you are not looking at. **Share** hands the same file to the
+system chooser — a transparent PNG is as useful in a video editor or a message
+as it is in a story.
 
-A profile silhouette, the site name, and a few big numbers. No axes, no legend:
-at a third of frame width on a phone those are unreadable noise rather than
-information.
+## The figures on the slate
 
-```bash
-diveslate overlay log.ssrf -o slate.png                       # tight-cropped, 1080×468
-diveslate overlay log.ssrf -o story.png --canvas story        # placed on a 9:16 frame
-diveslate overlay log.ssrf -o post.png  --canvas portrait --position bottom-center
-diveslate overlay log.ssrf -o slate.png --theme reef --max-stats 4
-```
-
-Without `--canvas` you get the slate at its own size, to position yourself in an
-editor. With it, the slate is placed on a full Instagram frame ready to drop
-straight on.
-
-| Option | Default | |
-|---|---|---|
-| `--canvas` | *off* | `square` 1080², `portrait` 1080×1350, `story` 1080×1920, `landscape` |
-| `--position` | `bottom-left` | four corners, `top-center`, `bottom-center`, `center` |
-| `--layout` | auto | `wide` badge or `tall` story card — `tall` is automatic for `--canvas story` |
-| `--width` | `1080` | slate width; ignored with `--canvas` |
-| `--theme` | `slate` | see [Themes](#themes) |
-| `--stats` | auto | see [Summary values](#summary-values) |
-| `--max-stats` | `3` | how many values to show |
-| `--gas` | off | mark and label gas switches on the curve |
-| `--date` | off | add the dive date under the site name |
-| `--no-scrim` | | drop the backdrop panel |
-| `--no-site` `--no-ceiling` `--no-deco` | | drop those pieces |
-
-A 9:16 story gets the **tall** layout automatically: the wide badge is only a
-quarter of that frame's height and reads as a small band adrift in it. Tall
-roughly doubles the profile height and enlarges every type size.
-
-### `render` — the full chart
-
-Axes, grid, legend, gas-switch markers, a stepped deco ceiling and a summary
-strip. Defaults to 1600×900.
-
-```bash
-diveslate render log.ssrf -o profile.svg
-diveslate render log.ssrf -o profile.png --theme abyss --width 2400 --height 1350
-diveslate render log.ssrf -o bare.png --no-grid --no-legend --no-stats
-```
-
-`--no-title`, `--no-axes`, `--no-grid`, `--no-ceiling`, `--no-gas`, `--no-stats`,
-`--no-legend`, `--no-deco` each drop one layer.
-
-## Summary values
-
-`--stats depth,time,gf,used` picks values explicitly, in order. Left to itself
-the slate shows max depth, runtime, then whichever of these the log can answer:
+Two are always shown — max depth and runtime — then whichever of these the log
+can answer, up to the limit you set:
 
 | key | shows | needs |
 |---|---|---|
@@ -108,7 +65,7 @@ the slate shows max depth, runtime, then whichever of these the log can answer:
 | `sac` | surface air consumption | the log's own SAC field |
 | `cns` | CNS toxicity percentage | the log's own CNS field |
 | `avg` | average depth | samples or the logged mean |
-| `gas` | mixes breathed, e.g. `Air/O2` | gas-switch events |
+| `gas` | mixes breathed, e.g. `Air, O2` | gas-switch events |
 
 A value the log cannot supply is skipped rather than shown blank.
 
@@ -118,10 +75,9 @@ A value the log cannot supply is skipped rather than shown blank.
 the ceiling on the way up, until the obligation clears* — the hang. This is
 deliberately not the same as the span during which deco was owed, which begins
 the moment the ceiling leaves the surface, usually while you are still on the
-bottom. On the sample dive those are 23 minutes and 50 minutes respectively, and
-reporting the latter as "deco" would claim fifty minutes of stops that never
-happened. `Dive.deco_spans()` still exposes the obligation span; `--no-deco`
-drops the figure entirely.
+bottom. On the reference dive those are 23 minutes and 50 minutes respectively,
+and reporting the latter as "deco" would claim fifty minutes of stops that never
+happened.
 
 **Gradient factors** are recovered by pattern from a free-text deco-model label
 (`GF 70/80`, `ZHL16C GF30/85`, `Buhlmann ZH-L16C + GF 30/85`). Anything that is
@@ -140,38 +96,15 @@ Each is derived from one base hue: that becomes the depth curve, and the
 gas-switch accent is then found by searching the hue circle for the colour that
 separates best from both the curve and the deco-ceiling red. Every palette is
 validated for colour-vision-deficiency separation, chroma, lightness and contrast
-before it ships (`diveslate.render.palette`).
+before it ships.
 
-Build your own:
+That validation is arithmetic, and it runs **at design time, not on the phone**.
+The app ships the answers as constants.
 
-```python
-from diveslate.render.theme import build_theme, validate_theme
-
-theme = build_theme("house", "#1f6fb2", mode="dark")
-print(validate_theme(theme))
-```
-
-`build_theme` **refuses** a base colour that cannot make a valid palette. In
-practice only hues from roughly **180° to 330°** work — cyan through blue, violet
-and magenta. Warm and green bases collide with the fixed red ceiling: a green
-curve looks maximally different from red to normal vision (ΔE 24) but measures
-2.2 under protanopia. Pass `strict=False` to override, and read the report.
-
-## Library
-
-```python
-from diveslate import parse_file
-from diveslate.render import render_svg, render_png, render_overlay, render_overlay_png
-
-dive = parse_file("log.ssrf").only()
-
-print(dive.computed_max_depth_m, dive.deco_time_s(), dive.gradient_factors)
-print(dive.gas_used_by_cylinder)
-
-open("profile.svg", "w").write(render_svg(dive))
-render_png(dive, "profile.png", width=2400, height=1350)
-render_overlay_png(dive, "story.png", canvas="story", position="center")
-```
+Only hues from roughly **180° to 330°** work — cyan through blue, violet and
+magenta. Warm and green bases collide with the fixed red ceiling: a green curve
+looks maximally different from red to normal vision (ΔE 24) but measures 2.2
+under protanopia.
 
 ## Formats
 
@@ -181,59 +114,82 @@ render_overlay_png(dive, "story.png", canvas="story", position="center")
 | UDDF 3.x | `.uddf`, `.xml` | SI units, namespace-agnostic; mandatory deco stops only |
 
 Detection reads file content, not the extension, so a renamed log still works.
-New formats plug in through the `diveslate.parsers` entry-point group.
+
+## Build
 
 ```bash
-diveslate info log.ssrf     # what's in the file
-```
-
-## Android
-
-`android/` holds a Kotlin reimplementation and a phone app: share a dive out of
-Subsurface-mobile, adjust the slate, and send it to Instagram as a story sticker
-or save it to the gallery as a transparent PNG.
-
-```bash
-cd android && ./gradlew core:test           # no device needed
 cd android && ./gradlew :app:installDebug
 ```
 
-The Python here stays canonical. The two are kept in step by `conformance/` —
-fixtures generated from this implementation covering parsed models, every
-derived figure, the unit grammar (including input that must be *refused*), and
-the palettes. The Kotlin tests read those files, so a divergence fails a build
-rather than surfacing months later as a wrong number on a post.
+Needs JDK 21 on `JAVA_HOME`, and the Android SDK — `ANDROID_HOME`, or `sdk.dir`
+in `android/local.properties`. The wrapper fetches its own Gradle. Android Studio
+is **not** required; it is only needed for the IDE and the emulator GUI.
 
-See [android/README.md](android/README.md), and `CLAUDE.md` for the handful of
-places the port deliberately differs.
+```bash
+cd android && ./gradlew core:test          # 40 tests, no device
+cd android && ./gradlew :app:assembleRelease
+```
 
-## Related
+The release APK builds **unsigned**. Signing needs a keystore you generate
+yourself (`keytool -genkeypair`) plus a `signingConfigs` block reading from
+`local.properties`, which is gitignored.
 
-- [Dive-Plan](https://github.com/paul-charp/Dive-Plan) — the planning and
-  decompression half of the stack. Its `subsurface` formatter writes logs
-  Dive-Slate can render, so you can draw a plan the same way you draw a dive.
+## Repository layout
+
+```
+android/       the app. core/ is plain Kotlin/JVM — units, models, both
+               parsers, palettes, the slate layout — and builds with only a
+               JDK. app/ is Compose, the Canvas painter, intents, export.
+
+conformance/   the fixtures core/ is tested against: full parsed models for
+               each log, a table-driven spec for the unit grammar, synthetic
+               deco profiles, and the baked palettes. data/ holds the source
+               logs those describe.
+
+tools/         Python, design-time only. The palette maths and the scripts
+               that bake it into android/.../Themes.kt. Nothing here ships.
+```
+
+`core` emits the slate as a **display list**, not as pixels, and `app` merely
+paints it. That split is what makes the interesting code testable without a
+device — including all of the geometry.
+
+The palette code is Python because it is a **design instrument**: it exists to
+prove a palette clears the gates, and having proved it for the nine presets, its
+job is done. Porting it would mean shipping a colour-science library on a phone
+to recompute a constant.
 
 ## Development
 
-```bash
-uv sync
-uv run pytest
-uv run ruff check . && uv run ruff format .
-uv run mypy src
-uv run python .claude/generate-index.py   # refresh the API map
-```
+`core:test` reads `conformance/`, so a fixture change invalidates the task rather
+than reporting up to date — if a green run ever looks too good, `--rerun-tasks`
+is the way to check.
 
-After any deliberate behaviour change, refresh the fixtures the Kotlin port is
-held to — `tests/test_conformance.py` fails until you do:
+Changing a palette means regenerating what the app ships:
 
 ```bash
-uv run python tools/export_oracle.py
 uv run python tools/export_theme_tokens.py
 uv run python tools/generate_kotlin_themes.py
 ```
 
-`.claude/codebase-index.md` is a generated map of every module and signature —
-start there rather than reading source when you only need to know what exists.
+Then `uv run pytest` to confirm the baked tokens still match the maths, and
+`uv run ruff check . && uv run mypy tools`.
+
+`CLAUDE.md` carries the rest: the handful of behaviours that are easy to break,
+how a share intent actually arrives, and the reasoning behind decisions that
+look arbitrary from the outside. Read it before changing parsing, palettes or
+the intent filters.
+
+## Known gaps
+
+- Settings do not persist across launches: palette, format, opacity and figure
+  choices reset every time.
+- No background-media picker, so the palette cannot yet be judged against your
+  own footage — only against the checkerboard.
+- No library. Every incoming log is already copied to `filesDir/logs/` with a
+  timestamp, and nothing ever reads that directory back — so re-rendering an
+  old dive means exporting it from Subsurface again. Surfacing what is already
+  being saved is the cheapest real improvement left.
 
 ## License
 
