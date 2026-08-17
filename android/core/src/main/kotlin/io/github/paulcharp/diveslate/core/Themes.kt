@@ -38,7 +38,6 @@ data class SlateTheme(
     val curveFillTop: Long,
     val curveFillBottom: Long,
     val ceiling: Long,
-    val ceilingFill: Long,
     val accent: Long,
     val fontSize: Float,
     val titleSize: Float,
@@ -77,7 +76,6 @@ val ABYSS: SlateTheme = SlateTheme(
     curveFillTop = 0x610078CF,
     curveFillBottom = 0x0D0078CF,
     ceiling = 0xFFD03B3B,
-    ceilingFill = 0x38D03B3B,
     accent = 0xFF018D74,
     fontSize = 13.0f,
     titleSize = 20.0f,
@@ -101,7 +99,6 @@ val INK: SlateTheme = SlateTheme(
     curveFillTop = 0x4C08C8D8,
     curveFillBottom = 0x0A08C8D8,
     ceiling = 0xFFD03B3B,
-    ceilingFill = 0x2ED03B3B,
     accent = 0xFF7E6CD9,
     fontSize = 13.0f,
     titleSize = 20.0f,
@@ -125,7 +122,6 @@ val LAGOON: SlateTheme = SlateTheme(
     curveFillTop = 0x6109A5B3,
     curveFillBottom = 0x0D09A5B3,
     ceiling = 0xFFD03B3B,
-    ceilingFill = 0x38D03B3B,
     accent = 0xFF915BC2,
     fontSize = 13.0f,
     titleSize = 20.0f,
@@ -149,7 +145,6 @@ val LIGHT: SlateTheme = SlateTheme(
     curveFillTop = 0x4C2A78D6,
     curveFillBottom = 0x0A2A78D6,
     ceiling = 0xFFD03B3B,
-    ceilingFill = 0x2ED03B3B,
     accent = 0xFFEDA100,
     fontSize = 13.0f,
     titleSize = 20.0f,
@@ -173,7 +168,6 @@ val ORCHID: SlateTheme = SlateTheme(
     curveFillTop = 0x61813C9D,
     curveFillBottom = 0x0D813C9D,
     ceiling = 0xFFD03B3B,
-    ceilingFill = 0x38D03B3B,
     accent = 0xFF008C82,
     fontSize = 13.0f,
     titleSize = 20.0f,
@@ -197,7 +191,6 @@ val PAPER: SlateTheme = SlateTheme(
     curveFillTop = 0x4C05A9F7,
     curveFillBottom = 0x0A05A9F7,
     ceiling = 0xFFD03B3B,
-    ceilingFill = 0x2ED03B3B,
     accent = 0xFFA05FC4,
     fontSize = 13.0f,
     titleSize = 20.0f,
@@ -221,7 +214,6 @@ val REEF: SlateTheme = SlateTheme(
     curveFillTop = 0x6107A99C,
     curveFillBottom = 0x0D07A99C,
     ceiling = 0xFFD03B3B,
-    ceilingFill = 0x38D03B3B,
     accent = 0xFF8061CD,
     fontSize = 13.0f,
     titleSize = 20.0f,
@@ -245,7 +237,6 @@ val SLATE: SlateTheme = SlateTheme(
     curveFillTop = 0x613987E5,
     curveFillBottom = 0x0D3987E5,
     ceiling = 0xFFD03B3B,
-    ceilingFill = 0x38D03B3B,
     accent = 0xFFC98500,
     fontSize = 13.0f,
     titleSize = 20.0f,
@@ -269,7 +260,6 @@ val TWILIGHT: SlateTheme = SlateTheme(
     curveFillTop = 0x615B4CB6,
     curveFillBottom = 0x0D5B4CB6,
     ceiling = 0xFFD03B3B,
-    ceilingFill = 0x38D03B3B,
     accent = 0xFF008C82,
     fontSize = 13.0f,
     titleSize = 20.0f,
@@ -280,31 +270,3 @@ val TWILIGHT: SlateTheme = SlateTheme(
 
 /** Every palette, default first. */
 val SLATE_THEMES: List<SlateTheme> = listOf(SLATE, LIGHT, ABYSS, INK, LAGOON, ORCHID, PAPER, REEF, TWILIGHT)
-
-fun slateTheme(name: String): SlateTheme =
-    SLATE_THEMES.firstOrNull { it.name == name }
-        ?: throw IllegalArgumentException(
-            "unknown theme $name; available: " + SLATE_THEMES.joinToString { it.name }
-        )
-
-/**
- * Hues a dark-mode colour control may offer: 175-215, 260-330 degrees.
- *
- * Not every hue that passes the gates — every hue whose whole
- * neighbourhood passes, so the control cannot land next to a cliff.
- * The control indexes this list rather than mapping its travel onto
- * degrees, which makes an excluded band unreachable rather than
- * merely discouraged.
- */
-val SAFE_HUES_DARK: IntArray = intArrayOf(175, 180, 185, 190, 195, 200, 205, 210, 215, 260, 265, 270, 275, 280, 285, 290, 295, 300, 305, 310, 315, 320, 325, 330)
-
-/**
- * Hues a light-mode colour control may offer: 70-105, 170-230, 265-350 degrees.
- *
- * Not every hue that passes the gates — every hue whose whole
- * neighbourhood passes, so the control cannot land next to a cliff.
- * The control indexes this list rather than mapping its travel onto
- * degrees, which makes an excluded band unreachable rather than
- * merely discouraged.
- */
-val SAFE_HUES_LIGHT: IntArray = intArrayOf(70, 75, 80, 85, 90, 95, 100, 105, 170, 175, 180, 185, 190, 195, 200, 205, 210, 215, 220, 225, 230, 265, 270, 275, 280, 285, 290, 295, 300, 305, 310, 315, 320, 325, 330, 335, 340, 345, 350)

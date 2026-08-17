@@ -95,7 +95,6 @@ class Theme:
     curve_fill_top: str
     curve_fill_bottom: str
     ceiling: str
-    ceiling_fill: str
     accent: str
 
     # Type.
@@ -124,7 +123,6 @@ SLATE = Theme(
     curve_fill_top="rgba(57,135,229,0.38)",
     curve_fill_bottom="rgba(57,135,229,0.05)",
     ceiling="#d03b3b",
-    ceiling_fill="rgba(208,59,59,0.22)",
     accent="#c98500",
 )
 
@@ -143,7 +141,6 @@ LIGHT = Theme(
     curve_fill_top="rgba(42,120,214,0.30)",
     curve_fill_bottom="rgba(42,120,214,0.04)",
     ceiling="#d03b3b",
-    ceiling_fill="rgba(208,59,59,0.18)",
     accent="#eda100",
 )
 
@@ -221,7 +218,6 @@ def build_theme(
         curve_fill_top=_rgba(curve, top),
         curve_fill_bottom=_rgba(curve, bottom),
         ceiling=CEILING,
-        ceiling_fill=_rgba(CEILING, 0.22 if mode == "dark" else 0.18),
         accent=accent,
     )
 

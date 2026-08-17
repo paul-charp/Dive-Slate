@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Any
 
 import theme as theme_mod
+from _console import use_utf8_stdout
 from palette import contrast, validate
 from theme import CEILING, THEMES, Theme, build_theme
 
@@ -141,7 +142,6 @@ def theme_json(theme: Theme) -> dict[str, Any]:
         "curve_fill_top",
         "curve_fill_bottom",
         "ceiling",
-        "ceiling_fill",
         "accent",
     )
 
@@ -316,6 +316,7 @@ def build_payload() -> dict[str, Any]:
 
 
 def main() -> int:
+    use_utf8_stdout()
     payload = build_payload()
 
     OUT.parent.mkdir(parents=True, exist_ok=True)

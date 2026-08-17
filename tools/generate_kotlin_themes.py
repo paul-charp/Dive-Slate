@@ -18,6 +18,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from _console import use_utf8_stdout
+
 ROOT = Path(__file__).resolve().parent.parent
 TOKENS = ROOT / "conformance" / "themes.json"
 OUT = ROOT / "android/core/src/main/kotlin/io/github/paulcharp/diveslate/core/Themes.kt"
@@ -34,7 +36,6 @@ COLOUR_FIELDS = [
     ("curveFillTop", "curve_fill_top"),
     ("curveFillBottom", "curve_fill_bottom"),
     ("ceiling", "ceiling"),
-    ("ceilingFill", "ceiling_fill"),
     ("accent", "accent"),
 ]
 
@@ -78,7 +79,6 @@ data class SlateTheme(
     val curveFillTop: Long,
     val curveFillBottom: Long,
     val ceiling: Long,
-    val ceilingFill: Long,
     val accent: Long,
     val fontSize: Float,
     val titleSize: Float,
@@ -134,6 +134,7 @@ def theme_kotlin(name: str, data: dict[str, Any]) -> str:
 
 
 def main() -> int:
+    use_utf8_stdout()
     payload = json.loads(TOKENS.read_text(encoding="utf-8"))
     themes = payload["themes"]
 
@@ -155,32 +156,13 @@ def main() -> int:
     parts.append(
         "\n/** Every palette, default first. */\n"
         f"val SLATE_THEMES: List<SlateTheme> = listOf({listing})\n"
-        "\n"
-        "fun slateTheme(name: String): SlateTheme =\n"
-        "    SLATE_THEMES.firstOrNull { it.name == name }\n"
-        "        ?: throw IllegalArgumentException(\n"
-        '            "unknown theme $name; available: " + '
-        "SLATE_THEMES.joinToString { it.name }\n"
-        "        )\n"
     )
 
-    slider = payload["slider_hues"]
-    for mode in ("dark", "light"):
-        entry = slider[mode]
-        hues = ", ".join(str(h) for h in entry["hues"])
-        bands = ", ".join(f"{lo}-{hi}" for lo, hi in entry["bands"])
-        parts.append(
-            f"\n/**\n"
-            f" * Hues a {mode}-mode colour control may offer: {bands} degrees.\n"
-            f" *\n"
-            f" * Not every hue that passes the gates — every hue whose whole\n"
-            f" * neighbourhood passes, so the control cannot land next to a cliff.\n"
-            f" * The control indexes this list rather than mapping its travel onto\n"
-            f" * degrees, which makes an excluded band unreachable rather than\n"
-            f" * merely discouraged.\n"
-            f" */\n"
-            f"val SAFE_HUES_{mode.upper()}: IntArray = intArrayOf({hues})\n"
-        )
+    # No lookup-by-name function and no SAFE_HUES arrays are emitted. Both were
+    # generated for a hue control the app never grew — it offers these nine
+    # palettes and picks from SLATE_THEMES directly. The analysis behind the
+    # arrays is still recorded, under `slider_hues` in conformance/themes.json;
+    # what stopped shipping is Kotlin nothing referenced.
 
     text = "".join(parts)
     OUT.parent.mkdir(parents=True, exist_ok=True)
@@ -188,8 +170,6 @@ def main() -> int:
     print(
         f"themes -> {OUT.relative_to(ROOT)}  ({len(text):,} bytes, {len(themes)} palettes)"
     )
-    for mode in ("dark", "light"):
-        print(f"  safe hues {mode}: {slider[mode]['count']}")
     return 0
 
 
