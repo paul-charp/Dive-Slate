@@ -92,6 +92,7 @@ tools/
   palette.py          OKLab/OKLCH maths, CVD simulation, the palette gates
   theme.py            Theme tokens; hand-built SLATE/LIGHT + seven generated
   export_theme_tokens.py, generate_kotlin_themes.py
+  _console.py         UTF-8 stdout, so a summary cannot fail a generation
   test_themes.py      the three tests that guard the generated tokens
 ```
 
