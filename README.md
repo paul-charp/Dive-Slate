@@ -149,7 +149,10 @@ cd android && ./gradlew :app:assembleRelease
 With no keystore configured, `assembleRelease` signs with the **shared SDK debug
 key** and says so. That is fine for putting a build on your own phone and no use
 for distribution — an install signed with it can never be updated by a properly
-signed one, because Android identifies an app by its signature.
+signed one, because Android identifies an app by its signature. To sign for real,
+put `storeFile`, `storePassword`, `keyAlias` and `keyPassword` in
+`keystore.properties` at the repository root; it is gitignored, and the build
+prints which key it used and which file configured it.
 
 Releases are cut by pushing a `v*` tag; GitHub builds, signs, verifies and
 publishes. [docs/RELEASING.md](docs/RELEASING.md) covers the keystore, the

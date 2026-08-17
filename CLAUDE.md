@@ -36,7 +36,9 @@ tools/         Python. Palette maths and the generators for Themes.kt.
 ```bash
 cd android && ./gradlew core:test          # 40 tests, no device needed
 cd android && ./gradlew :app:installDebug
-cd android && ./gradlew :app:assembleRelease
+cd android && ./gradlew :app:assembleRelease   # signed if keystore.properties
+                                               # is present, debug key if not —
+                                               # it says which, out loud
 ```
 
 Needs JDK 21 on `JAVA_HOME`, and the SDK, which lives in
@@ -63,7 +65,9 @@ Python, after any palette change:
 uv sync
 uv run python tools/export_theme_tokens.py     # palettes + slider ranges
 uv run python tools/generate_kotlin_themes.py  # -> android/.../Themes.kt
-uv run pytest                                  # 3 tests: the baked tokens still match the maths
+uv run pytest                                  # 5: 3 that the baked tokens match
+                                               # the maths, 2 that the release
+                                               # manifest matches the app
 uv run ruff check . && uv run ruff format .    # line length 88
 uv run mypy tools                              # strict mode is on
 ```

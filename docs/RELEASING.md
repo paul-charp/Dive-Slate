@@ -6,17 +6,19 @@ to be trustworthy in a way a store would otherwise enforce for you.
 
 ## Cutting a release
 
-Bump both numbers in [`android/app/build.gradle.kts`](../android/app/build.gradle.kts):
+Bump both numbers in [`android/app/build.gradle.kts`](../android/app/build.gradle.kts).
+The tree currently carries `versionCode = 11` / `versionName = "0.3.0"`, so the
+release after this one is:
 
 ```kotlin
-versionCode = 11        // must increase; this is what the updater compares
-versionName = "0.2.4"   // must equal the tag without its leading v
+versionCode = 12        // must increase; this is what the updater compares
+versionName = "0.3.1"   // must equal the tag without its leading v
 ```
 
 Commit, then tag and push:
 
 ```bash
-git tag v0.2.4 && git push origin main v0.2.4
+git tag v0.3.1 && git push origin main v0.3.1
 ```
 
 That is the whole ritual. The `Release` workflow builds, signs, verifies and
@@ -24,7 +26,7 @@ publishes. It refuses to publish rather than publish something wrong:
 
 | Check | Why it exists |
 |---|---|
-| Tag matches `versionName` | Otherwise `v0.2.4` ships an APK whose start screen says 0.2.3 |
+| Tag matches `versionName` | Otherwise `v0.3.1` ships an APK whose start screen says 0.3.0 |
 | `versionCode` beats the published one | The updater compares numerically; a code that did not increase is an update nobody is ever offered |
 | `apksigner` says the cert is not `CN=Android Debug` | A debug-signed release installs cleanly, so nothing looks wrong until a properly signed update is refused by every phone that took it |
 | `core:test` | A tag can be pushed at a commit whose CI went red |
@@ -35,7 +37,7 @@ a workflow artifact for 14 days.
 
 ## The signing key
 
-Android identifies an app by its signing certificate. The key that signs 0.2.4
+Android identifies an app by its signing certificate. The key that signs 0.3.0
 must sign every version after it, forever — **if it is lost, no one who
 installed the app can ever be updated**; they have to uninstall, losing their
 data, and install afresh. There is no recovery process and nobody to appeal to.
@@ -45,43 +47,55 @@ So: it is generated once, by you, on your machine. It never enters this repo
 committed), and it is backed up somewhere that is not a git repository and not
 only this laptop.
 
+**The key for this app already exists**, at `~/.android/keys/release.jks` under
+alias `release`, RSA 4096, and the certificate names its holder. There is nothing
+to generate — and nothing that may be regenerated, because a second key is a
+different app as far as every phone is concerned.
+
+Recorded only in case a *new* app ever needs one:
+
 ```powershell
-New-Item -ItemType Directory -Force "$env:USERPROFILE\keys" | Out-Null
-keytool -genkeypair -v -keystore "$env:USERPROFILE\keys\diveslate.jks" `
+keytool -genkeypair -v -keystore "$env:USERPROFILE\.android\keys\release.jks" `
         -storetype PKCS12 -keyalg RSA -keysize 4096 -validity 10000 `
-        -alias diveslate -dname "CN=Paul Charpentier, O=Dive Slate"
+        -alias release
 ```
 
 PowerShell, not Git Bash: Java's interactive password prompt misbehaves under
-MSYS. **PKCS12 uses one password for both the store and the key** — there is no
-second password to invent, which is why two of the secrets below hold the same
-value.
+MSYS. With `-storetype PKCS12` there is one password for both the store and the
+key, so there is no second password to invent.
 
 10000 days of validity is about 27 years. A certificate that expires cannot sign
 an update, and the app is expected to outlive the decision.
 
 ## Where the credentials live
 
-Four names, read from the environment first and `local.properties` second — see
-the comment on `releaseSigning` in `app/build.gradle.kts`. All four or none: a
-partial set fails the build instead of quietly falling through to the debug key.
+Four names, read from the environment first, then `keystore.properties`, then
+`local.properties` — see the comment on `releaseSigning` in
+`app/build.gradle.kts`. All four or none: a partial set fails the build instead of
+quietly falling through to the debug key.
 
-**CI** reads them from repository secrets:
+**CI** reads them from repository secrets. They are the same four values already
+in your `keystore.properties`, plus the keystore itself — which cannot be a
+committed file on a public repo, so it travels as base64 in a secret instead:
 
 | Secret | Value |
 |---|---|
 | `DIVESLATE_KEYSTORE_BASE64` | the `.jks`, base64-encoded |
-| `DIVESLATE_STORE_PASSWORD` | the password you chose |
-| `DIVESLATE_KEY_PASSWORD` | the same password (PKCS12) |
-| `DIVESLATE_KEY_ALIAS` | `diveslate` |
+| `DIVESLATE_STORE_PASSWORD` | `storePassword` from `keystore.properties` |
+| `DIVESLATE_KEY_PASSWORD` | `keyPassword` from `keystore.properties` |
+| `DIVESLATE_KEY_ALIAS` | `keyAlias` — `release` |
 
 ```powershell
-[Convert]::ToBase64String([IO.File]::ReadAllBytes("$env:USERPROFILE\keys\diveslate.jks")) |
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("$env:USERPROFILE\.android\keys\release.jks")) |
     gh secret set DIVESLATE_KEYSTORE_BASE64 --repo paul-charp/Dive-Slate
 gh secret set DIVESLATE_STORE_PASSWORD --repo paul-charp/Dive-Slate
 gh secret set DIVESLATE_KEY_PASSWORD --repo paul-charp/Dive-Slate
-gh secret set DIVESLATE_KEY_ALIAS --repo paul-charp/Dive-Slate --body diveslate
+gh secret set DIVESLATE_KEY_ALIAS --repo paul-charp/Dive-Slate --body release
 ```
+
+A secret cannot be read back afterwards, only overwritten — GitHub shows you the
+name and the date, never the value. Set the wrong one and the symptom is a build
+failing to open the keystore, which is why the rehearsal below exists.
 
 The workflow decodes the keystore into `RUNNER_TEMP`, never into the workspace,
 so nothing archived or packaged can contain it.
@@ -145,12 +159,12 @@ app needs no API call, no token and no knowledge of tag names:
 ```json
 {
   "versionCode": 11,
-  "versionName": "0.2.4",
-  "tag": "v0.2.4",
-  "apkUrl": "https://github.com/paul-charp/Dive-Slate/releases/download/v0.2.4/dive-slate-0.2.4.apk",
+  "versionName": "0.3.0",
+  "tag": "v0.3.0",
+  "apkUrl": "https://github.com/paul-charp/Dive-Slate/releases/download/v0.3.0/dive-slate-0.3.0.apk",
   "apkSha256": "…",
-  "apkSize": 1948466,
-  "releaseUrl": "https://github.com/paul-charp/Dive-Slate/releases/tag/v0.2.4"
+  "apkSize": 1969054,
+  "releaseUrl": "https://github.com/paul-charp/Dive-Slate/releases/tag/v0.3.0"
 }
 ```
 
