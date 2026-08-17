@@ -30,6 +30,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
@@ -64,6 +65,7 @@ import io.github.paulcharp.diveslate.BuildConfig
 import io.github.paulcharp.diveslate.SlateExport
 import io.github.paulcharp.diveslate.SlateFiles
 import io.github.paulcharp.diveslate.SlatePainter
+import io.github.paulcharp.diveslate.UpdateCheck
 import io.github.paulcharp.diveslate.core.Dive
 import io.github.paulcharp.diveslate.core.DiveLog
 import io.github.paulcharp.diveslate.core.OverlayOptions
@@ -74,6 +76,7 @@ import io.github.paulcharp.diveslate.core.SlateTheme
 import io.github.paulcharp.diveslate.core.ceilMetres
 import io.github.paulcharp.diveslate.core.formatMinutes
 import io.github.paulcharp.diveslate.core.renderOverlay
+import java.io.File
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -98,6 +101,33 @@ fun LoadState.withMessage(message: String): LoadState = when (this) {
     is LoadState.Loaded -> copy(notice = Notice(message))
     else -> LoadState.Failed(message)
 }
+
+/**
+ * Where the app is in finding out whether it is out of date.
+ *
+ * [Idle] is silent, and it is where an automatic check that found nothing —
+ * including one that failed — puts things back. Being told "you are up to date"
+ * or "GitHub could not be reached" is only useful in answer to having asked, and
+ * a daily background check nobody requested has no business reporting either.
+ */
+sealed interface UpdateState {
+    data object Idle : UpdateState
+    data object Checking : UpdateState
+    data object UpToDate : UpdateState
+    data class Available(val release: UpdateCheck.Release) : UpdateState
+    data class Downloading(val release: UpdateCheck.Release, val fraction: Float) : UpdateState
+    data class Ready(val release: UpdateCheck.Release, val apk: File) : UpdateState
+    data class Failed(val message: String) : UpdateState
+}
+
+/** Bundled so that the app's signature stays about dive logs. */
+data class Updates(
+    val state: UpdateState,
+    val onCheck: () -> Unit,
+    val onDownload: (UpdateCheck.Release) -> Unit,
+    val onInstall: (File) -> Unit,
+    val onDismiss: () -> Unit,
+)
 
 /**
  * Checkerboard greys.
@@ -140,6 +170,7 @@ private val STAT_LABELS = listOf(
 @Composable
 fun DiveSlateApp(
     state: LoadState,
+    updates: Updates,
     onLoadSample: () -> Unit,
     onOpenUri: (Uri) -> Unit,
     onBack: () -> Unit,
@@ -167,7 +198,12 @@ fun DiveSlateApp(
 
         Box(Modifier.fillMaxSize().background(Surface).safeDrawingPadding()) {
             when (state) {
-                is LoadState.Empty -> Welcome(onLoadSample) { picker.launch(PICKER_TYPES) }
+                is LoadState.Empty -> Welcome(
+                    onLoadSample = onLoadSample,
+                    onPickFile = { picker.launch(PICKER_TYPES) },
+                    onCheckUpdates = updates.onCheck,
+                    checking = updates.state is UpdateState.Checking,
+                )
                 is LoadState.Failed -> Problem(state.message, onBack) {
                     picker.launch(PICKER_TYPES)
                 }
@@ -187,6 +223,13 @@ fun DiveSlateApp(
                 }
             }
 
+            // Over whichever screen is showing, rather than tucked into the
+            // welcome page. The ordinary way in is a share from Subsurface,
+            // which lands straight in the editor, so anything only reachable
+            // from the start screen goes unseen by exactly the people who use
+            // the app most.
+            UpdateBanner(updates, Modifier.align(Alignment.TopCenter))
+
             SnackbarHost(
                 hostState = snackbars,
                 modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp),
@@ -204,7 +247,12 @@ fun DiveSlateApp(
 }
 
 @Composable
-private fun Welcome(onLoadSample: () -> Unit, onPickFile: () -> Unit) {
+private fun Welcome(
+    onLoadSample: () -> Unit,
+    onPickFile: () -> Unit,
+    onCheckUpdates: () -> Unit,
+    checking: Boolean,
+) {
     Column(
         Modifier.fillMaxSize().padding(28.dp),
         verticalArrangement = Arrangement.Center,
@@ -233,8 +281,122 @@ private fun Welcome(onLoadSample: () -> Unit, onPickFile: () -> Unit) {
         ) {
             Text("Open the sample dive")
         }
+        // The check also runs by itself once a day. This is for the moment you
+        // have just been told a fix exists and do not want to wait for that.
+        TextButton(
+            onClick = onCheckUpdates,
+            enabled = !checking,
+            modifier = Modifier.padding(top = 6.dp),
+        ) {
+            Text(if (checking) "Checking…" else "Check for updates", color = Muted, fontSize = 13.sp)
+        }
     }
 }
+
+/**
+ * What the app has to say about a newer version.
+ *
+ * There is no store to do this, so the app has to say it itself — and it is the
+ * one thing here that talks to the network, which is why every state is visible
+ * rather than a spinner that resolves into a silent install.
+ */
+@Composable
+private fun UpdateBanner(updates: Updates, modifier: Modifier = Modifier) {
+    val state = updates.state
+    if (state is UpdateState.Idle) return
+
+    Column(
+        modifier
+            .fillMaxWidth()
+            .padding(10.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color(0xFF16232B))
+            .border(1.dp, Color(0xFF2C4150), RoundedCornerShape(12.dp))
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+    ) {
+        when (state) {
+            is UpdateState.Idle -> Unit
+
+            is UpdateState.Checking ->
+                Text("Checking for updates…", color = Muted, fontSize = 13.sp)
+
+            is UpdateState.UpToDate -> BannerRow(
+                title = "Dive Slate ${BuildConfig.VERSION_NAME} is the latest version",
+                onDismiss = updates.onDismiss,
+            )
+
+            is UpdateState.Available -> {
+                BannerRow(
+                    title = "Dive Slate ${state.release.versionName} is available",
+                    detail = "${megabytes(state.release.apkSize)} download",
+                    onDismiss = updates.onDismiss,
+                )
+                Button(
+                    onClick = { updates.onDownload(state.release) },
+                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                ) {
+                    Text("Download")
+                }
+            }
+
+            is UpdateState.Downloading -> {
+                Text(
+                    "Downloading ${state.release.versionName}…",
+                    color = OnSurface,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+                // Determinate, because the manifest carries the size. A bar that
+                // cannot say how far along it is turns a slow connection into an
+                // app that looks stuck.
+                LinearProgressIndicator(
+                    progress = { state.fraction },
+                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                )
+            }
+
+            is UpdateState.Ready -> {
+                BannerRow(
+                    title = "Dive Slate ${state.release.versionName} is ready to install",
+                    // Android asks for permission to install from this app the
+                    // first time, in Settings, and there is no way to prompt for
+                    // it inline — so say what is about to happen instead of
+                    // letting the installer appear to do nothing.
+                    detail = "Android will ask you to confirm the install",
+                    onDismiss = updates.onDismiss,
+                )
+                Button(
+                    onClick = { updates.onInstall(state.apk) },
+                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                ) {
+                    Text("Install")
+                }
+            }
+
+            is UpdateState.Failed -> BannerRow(
+                title = "Could not check for updates",
+                detail = state.message,
+                onDismiss = updates.onDismiss,
+            )
+        }
+    }
+}
+
+@Composable
+private fun BannerRow(title: String, detail: String? = null, onDismiss: () -> Unit) {
+    Row(verticalAlignment = Alignment.Top) {
+        Column(Modifier.weight(1f)) {
+            Text(title, color = OnSurface, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            detail?.let {
+                Text(it, color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
+            }
+        }
+        TextButton(onClick = onDismiss) { Text("Not now", color = Muted, fontSize = 12.sp) }
+    }
+}
+
+private fun megabytes(bytes: Long): String =
+    String.format(Locale.US, "%.1f MB", bytes / (1024.0 * 1024.0))
 
 @Composable
 private fun Problem(message: String, onBack: () -> Unit, onPickFile: () -> Unit) {

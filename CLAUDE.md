@@ -86,6 +86,7 @@ android/app/
   MainActivity.kt     share intake, the intent handling described below
   SlatePainter.kt     paints core's display list onto a Canvas
   SlateFiles.kt       MediaStore export, FileProvider
+  UpdateCheck.kt      self-update: manifest, download, checksum, installer
   ui/DiveSlateApp.kt  Compose UI
 
 tools/
@@ -94,6 +95,10 @@ tools/
   export_theme_tokens.py, generate_kotlin_themes.py
   _console.py         UTF-8 stdout, so a summary cannot fail a generation
   test_themes.py      the three tests that guard the generated tokens
+  test_release_contract.py  the workflow and UpdateCheck.kt agree on update.json
+
+docs/RELEASING.md     the keystore, the secrets, and what each refusal protects
+.github/workflows/    ci.yml on every push; release.yml on every v* tag
 ```
 
 `core` emits the slate as a **display list**, not as pixels, and `app` merely
@@ -170,6 +175,47 @@ export is not a workaround, it is the only route Android permits. (Its desktop
 cloud cache *is* readable, at `%APPDATA%\Subsurface\cloudstorage` — a git
 working tree of per-dive text files. That is how the format was inspected; it
 has no bearing on the phone.)
+
+## Shipping, and the app updating itself
+
+There is no Play Store here. The GitHub release assets **are** the distribution
+channel and the app updates itself from them, which makes the pipeline
+load-bearing in a way a store would otherwise be. `docs/RELEASING.md` is the
+procedure; this is what cost time.
+
+- **Never believe the build config about signing — read the certificate back off
+  the APK.** With no keystore configured `assembleRelease` falls back to the
+  shared debug key and *succeeds*. A debug-signed release installs cleanly, so
+  nothing looks wrong until an update signed with the real key is refused by
+  every phone that took it. The workflow runs `apksigner verify` and fails on
+  `CN=Android Debug`.
+- **The signing key cannot be replaced.** Android identifies an app by its
+  signature, so losing it means no installed copy can ever be updated. It is
+  generated outside this repo and `*.jks`, `*.p12`, `*.keystore` are gitignored
+  so a stray copy cannot be committed.
+- **A half-configured signing block fails the build.** Three of the four names
+  would otherwise fall through to the debug key and look like success — the same
+  reasoning as the derived figures degrading to nothing rather than to a guess.
+- **`versionCode` is what the updater compares**, numerically. A tag disagreeing
+  with `versionName`, or a code that does not beat the published one, fails the
+  release rather than publishing an update nobody is ever offered.
+- **`update.json` is fetched from `/releases/latest/download/`**, a path GitHub
+  resolves to whichever release is newest. That is why the app needs no API call,
+  no token and no tag names — and why marking a release as a prerelease is how to
+  publish a build without offering it to every installed copy.
+- The updater is **framework-only** — `org.json` and `HttpURLConnection` — so it
+  adds no dependency to the APK and needs no R8 keep rule.
+- **`REQUEST_INSTALL_PACKAGES` is Play-restricted.** If this app ever goes to the
+  Play Store, the self-updater goes with it.
+- **`InputStream.readNBytes` is API 33 on Android**, and `minSdk` is 29. It
+  compiles without a murmur and throws `NoSuchMethodError` on Android 10–12.
+  Framework methods that look like ordinary Java still need their API level
+  checked.
+- Two CI traps, neither of them visible from Windows: **`gradlew` committed
+  `100644`** fails a Linux runner with exit 126, which reads as a Gradle failure
+  rather than a permission one; and **`astral-sh/setup-uv` publishes no moving
+  major tag** — its major tags stop at v7 while releases are past v10, so `@v10`
+  resolves to nothing at all.
 
 ## Six things that are easy to break
 

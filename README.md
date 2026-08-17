@@ -1,5 +1,8 @@
 # Dive Slate
 
+[![CI](https://github.com/paul-charp/Dive-Slate/actions/workflows/ci.yml/badge.svg)](https://github.com/paul-charp/Dive-Slate/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/paul-charp/Dive-Slate)](https://github.com/paul-charp/Dive-Slate/releases/latest)
+
 An Android app that turns a dive log into a **transparent slate** — a compact
 badge of your profile to drop over a photo or video.
 
@@ -43,6 +46,24 @@ confirmed with a snackbar because a MediaStore write is otherwise silent and
 lands in an album you are not looking at. **Share** hands the same file to the
 system chooser — a transparent PNG is as useful in a video editor or a message
 as it is in a story.
+
+## Install
+
+Download the APK from the
+[latest release](https://github.com/paul-charp/Dive-Slate/releases/latest) and
+open it. Android 10 or newer.
+
+It is not on the Play Store, so your phone will ask once whether to allow
+installs from wherever you opened the file — a browser or a file manager. Each
+release also carries a `.sha256` beside the APK if you want to check the
+download by hand.
+
+**The app keeps itself up to date.** Once a day it asks GitHub whether a newer
+release exists and offers it to you; the download is verified against the
+checksum published in the release before Android is asked to install anything,
+and a mismatch is refused rather than installed. Those two requests are the only
+thing the app does with the network, and the only reason it asks for internet
+access at all.
 
 ## The figures on the slate
 
@@ -125,9 +146,15 @@ cd android && ./gradlew core:test          # 40 tests, no device
 cd android && ./gradlew :app:assembleRelease
 ```
 
-The release APK builds **unsigned**. Signing needs a keystore you generate
-yourself (`keytool -genkeypair`) plus a `signingConfigs` block reading from
-`local.properties`, which is gitignored.
+With no keystore configured, `assembleRelease` signs with the **shared SDK debug
+key** and says so. That is fine for putting a build on your own phone and no use
+for distribution — an install signed with it can never be updated by a properly
+signed one, because Android identifies an app by its signature.
+
+Releases are cut by pushing a `v*` tag; GitHub builds, signs, verifies and
+publishes. [docs/RELEASING.md](docs/RELEASING.md) covers the keystore, the
+repository secrets, and what each of the pipeline's refusals is protecting
+against.
 
 ## Repository layout
 
@@ -142,7 +169,13 @@ conformance/   the fixtures core/ is tested against: full parsed models for
                logs those describe.
 
 tools/         Python, design-time only. The palette maths and the scripts
-               that bake it into android/.../Themes.kt. Nothing here ships.
+               that bake it into android/.../Themes.kt, plus the check that
+               the release manifest and the app still agree about its fields.
+               Nothing here ships.
+
+docs/          RELEASING.md, and the screenshots this page uses.
+
+.github/       CI on every push; a signed release on every v* tag.
 ```
 
 `core` emits the slate as a **display list**, not as pixels, and `app` merely

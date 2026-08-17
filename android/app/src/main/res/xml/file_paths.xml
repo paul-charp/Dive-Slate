@@ -8,4 +8,12 @@
     <files-path
         name="logs"
         path="logs/" />
+    <!--
+      A downloaded update, handed to Android's package installer. It is another
+      process, so a file:// URI would throw FileUriExposedException before it saw
+      the bytes.
+    -->
+    <cache-path
+        name="updates"
+        path="updates/" />
 </paths>

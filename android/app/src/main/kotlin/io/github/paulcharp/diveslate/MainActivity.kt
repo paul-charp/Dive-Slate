@@ -10,12 +10,18 @@ import androidx.activity.compose.setContent
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.lifecycleScope
 import io.github.paulcharp.diveslate.core.DiveLog
 import io.github.paulcharp.diveslate.core.ParseException
 import io.github.paulcharp.diveslate.core.parseText
 import io.github.paulcharp.diveslate.ui.DiveSlateApp
 import io.github.paulcharp.diveslate.ui.LoadState
+import io.github.paulcharp.diveslate.ui.UpdateState
+import io.github.paulcharp.diveslate.ui.Updates
 import io.github.paulcharp.diveslate.ui.withMessage
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
@@ -29,6 +35,7 @@ import java.io.File
 class MainActivity : ComponentActivity() {
 
     private var state by mutableStateOf<LoadState>(LoadState.Empty)
+    private var updateState by mutableStateOf<UpdateState>(UpdateState.Idle)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -43,6 +50,13 @@ class MainActivity : ComponentActivity() {
         setContent {
             DiveSlateApp(
                 state = state,
+                updates = Updates(
+                    state = updateState,
+                    onCheck = { checkForUpdate(announce = true) },
+                    onDownload = { release -> downloadUpdate(release) },
+                    onInstall = { apk -> installUpdate(apk) },
+                    onDismiss = { updateState = UpdateState.Idle },
+                ),
                 onLoadSample = { loadBundledSample() },
                 onOpenUri = { uri -> openPicked(uri) },
                 onBack = { state = LoadState.Empty },
@@ -50,6 +64,11 @@ class MainActivity : ComponentActivity() {
                 onSaveToGallery = { slate, title -> saveToGallery(slate, title) },
             )
         }
+
+        // Last, and unannounced. Nothing above this line waits on the network,
+        // so a phone with no signal opens a dive log exactly as fast as one on
+        // wifi.
+        if (UpdateCheck.isAutoCheckDue(this)) checkForUpdate(announce = false)
     }
 
     /** A share can arrive while the app is already open. */
@@ -265,6 +284,108 @@ class MainActivity : ComponentActivity() {
         } catch (e: Exception) {
             state.withMessage("Could not save: ${e.message ?: e::class.simpleName}")
         }
+    }
+
+    /**
+     * Ask GitHub whether a newer build exists.
+     *
+     * [announce] separates the two reasons to be here. Asked for, every outcome
+     * is worth showing, including "you already have the latest" and whatever went
+     * wrong. Run by itself once a day, only an actual update is — nobody wants a
+     * banner reporting a failed background request they never made, and a daily
+     * "up to date" is noise about a thing that changes a few times a year.
+     *
+     * The timestamp is written whatever happens, including on failure. A phone in
+     * a dive centre with no usable wifi would otherwise retry on every single
+     * launch.
+     */
+    private fun checkForUpdate(announce: Boolean) {
+        if (updateState is UpdateState.Checking) return
+        if (announce) updateState = UpdateState.Checking
+
+        lifecycleScope.launch {
+            val outcome = withContext(Dispatchers.IO) { runCatching { UpdateCheck.check() } }
+            UpdateCheck.markChecked(this@MainActivity)
+            outcome
+                .onSuccess { release ->
+                    updateState = when {
+                        release != null -> UpdateState.Available(release)
+                        announce -> UpdateState.UpToDate
+                        else -> UpdateState.Idle
+                    }
+                }
+                .onFailure { e ->
+                    updateState = if (announce) {
+                        UpdateState.Failed(e.message ?: e::class.simpleName.orEmpty())
+                    } else {
+                        UpdateState.Idle
+                    }
+                }
+        }
+    }
+
+    /**
+     * Fetch the APK, then verify it before anyone is asked to install it.
+     *
+     * The progress figure is updated from the download thread and read by
+     * Compose; that is safe because it only ever writes [updateState], and a
+     * dropped intermediate value costs a repaint of a progress bar.
+     */
+    private fun downloadUpdate(release: UpdateCheck.Release) {
+        updateState = UpdateState.Downloading(release, 0f)
+        lifecycleScope.launch {
+            val outcome = withContext(Dispatchers.IO) {
+                runCatching {
+                    UpdateCheck.download(this@MainActivity, release) { fraction ->
+                        updateState = UpdateState.Downloading(release, fraction)
+                    }
+                }
+            }
+            outcome
+                .onSuccess { apk ->
+                    updateState = UpdateState.Ready(release, apk)
+                    // Straight into the installer, since the download was an
+                    // explicit request and stopping to ask again would be a tap
+                    // for nothing. The Install button stays for the case below,
+                    // where the first attempt cannot proceed yet.
+                    installUpdate(apk)
+                }
+                .onFailure { e ->
+                    updateState = UpdateState.Failed(
+                        e.message ?: "the download failed (${e::class.simpleName})",
+                    )
+                }
+        }
+    }
+
+    /**
+     * Hand the verified APK to Android's installer.
+     *
+     * Installing from outside a store is a permission the user grants in
+     * Settings, per app, and it cannot be requested with a runtime prompt. So the
+     * first attempt on a fresh install typically cannot proceed: that is not an
+     * error, it is a detour, and the banner keeps its Install button for the
+     * return trip. Sending them to the right Settings page and saying why is the
+     * whole of the handling.
+     */
+    private fun installUpdate(apk: File) {
+        if (!UpdateCheck.canInstall(this)) {
+            state = state.withMessage("Allow Dive Slate to install apps, then tap Install again")
+            runCatching { startActivity(UpdateCheck.unknownSourcesSettings(this)) }
+                .onFailure {
+                    state = state.withMessage(
+                        "This phone has no page for allowing installs from an app, " +
+                            "so the APK has to be opened from your files instead",
+                    )
+                }
+            return
+        }
+        runCatching { startActivity(UpdateCheck.installIntent(this, apk)) }
+            .onFailure { e ->
+                updateState = UpdateState.Failed(
+                    "Android would not open the installer: ${e.message ?: e::class.simpleName}",
+                )
+            }
     }
 
     /**

@@ -81,8 +81,11 @@ android {
         // floor for a phone that also runs Subsurface-mobile and Instagram.
         minSdk = 29
         targetSdk = 36
-        versionCode = 10
-        versionName = "0.2.3"
+        // versionCode is what the updater compares, and the release workflow
+        // refuses a tag whose name disagrees with versionName. Both move
+        // together; see docs/RELEASING.md.
+        versionCode = 11
+        versionName = "0.3.0"
     }
 
     signingConfigs {
@@ -152,6 +155,12 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.13.0")
     implementation("androidx.core:core-ktx:1.19.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.11.0")
+    // The update check runs on lifecycleScope + Dispatchers.IO. Already present
+    // transitively via lifecycle and Compose, and pinned to the version they
+    // already resolve to — declared only because the code names it directly, and
+    // a dependency you use through someone else's is one that can vanish under
+    // you in an unrelated upgrade.
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     implementation("androidx.compose.ui:ui-tooling-preview")

@@ -2,6 +2,23 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!--
+      Both of these exist for the updater, and for nothing else. The app reads
+      local files and draws a picture; without self-update it would need no
+      network at all.
+
+      There is no store in this picture, so an install has no other way to learn
+      that a fix exists. INTERNET is used for exactly two requests, both to
+      github.com: the update manifest, and the APK the user agreed to fetch.
+
+      REQUEST_INSTALL_PACKAGES only buys the right to *ask* — the user still
+      grants "install unknown apps" for this app in Settings, and Android shows
+      its own installer either way. Note it is a Play-restricted permission: if
+      this app ever goes to the Play Store, the updater goes with it.
+    -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <!--
       No <queries> block. Sharing goes through the system chooser, which resolves
       targets on the app's behalf without needing package visibility — the app
       never asks what is installed, so Android 11+ visibility filtering has
