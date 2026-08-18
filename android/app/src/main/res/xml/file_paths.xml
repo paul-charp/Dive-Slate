@@ -9,8 +9,11 @@
         name="logs"
         path="logs/" />
     <!--
-      No path for updates. The app downloaded the APK itself until 0.4.0 and
-      handed it to the package installer through here; it now opens the release
-      page and lets the browser do both, so there is no update file to share.
+      A downloaded update, handed to Android's package installer. It is another
+      process, so a file:// URI would throw FileUriExposedException before it saw
+      the bytes.
     -->
+    <cache-path
+        name="updates"
+        path="updates/" />
 </paths>

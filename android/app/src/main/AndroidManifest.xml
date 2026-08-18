@@ -2,22 +2,30 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!--
-      One permission, for the update check and nothing else. The app reads local
-      files and draws a picture; without the check it would need no network at
-      all. There is no store in this picture, so an install has no other way to
-      learn that a fix exists — INTERNET buys exactly one request, to github.com,
-      for a few hundred bytes of update manifest.
+      Both of these exist for the updater, and for nothing else. The app reads
+      local files and draws a picture; without self-update it would need no
+      network at all.
 
-      REQUEST_INSTALL_PACKAGES was here until 0.4.0 and is deliberately gone.
-      Downloading a binary and asking Android to install it is, as behaviour,
-      indistinguishable from a dropper: Play Protect classified a correctly
-      signed release as "Unsafe app blocked", and Google's enhanced fraud
-      protection blocks sideloading outright for apps that declare it — a phone
-      which cannot install is a phone that can never be updated again. The app
-      now opens the release page and lets the browser be the unknown source.
-      Do not add it back to save the user two taps.
+      There is no store in this picture, so an install has no other way to learn
+      that a fix exists. INTERNET is used for exactly two requests, both to
+      github.com: the update manifest, and the APK the user agreed to fetch.
+
+      REQUEST_INSTALL_PACKAGES only buys the right to *ask* — the user still
+      grants "install unknown apps" for this app in Settings, and Android shows
+      its own installer either way. Note it is a Play-restricted permission: if
+      this app ever goes to the Play Store, the updater goes with it.
+
+      It also costs a Play Protect warning, and that was weighed rather than
+      overlooked. Fetching a binary and asking to install it is behaviourally
+      what a dropper does, and 0.4.0 was refused with "Unsafe app blocked".
+      0.4.1 removed this permission and handed off to the browser; 0.4.3 put it
+      back deliberately, because the hand-off cost two extra taps and demoted
+      checksum verification from enforced to merely displayed. Removing it again
+      is a decision someone has already made twice — read the note in CLAUDE.md
+      before making it a third time.
     -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!--
       No <queries> block. Sharing goes through the system chooser, which resolves

@@ -82,20 +82,22 @@ installs from wherever you opened the file — a browser or a file manager. Each
 release also carries a `.sha256` beside the APK if you want to check the
 download by hand.
 
-**The app tells you when there is a newer version.** Once a day it asks GitHub
-whether one exists, and if so offers to open the release page — your browser
-downloads it and Android installs it from there. That single request for a few
-hundred bytes of manifest is the only thing the app does with the network, and
-the only reason it asks for internet access at all.
+**The app keeps itself up to date.** Once a day it asks GitHub whether a newer
+release exists and offers it to you; the download is verified against the
+checksum published in the release before Android is asked to install anything,
+and a mismatch is refused rather than installed. Those two requests are the only
+thing the app does with the network, and the only reason it asks for internet
+access at all.
 
-It used to download and install the update itself, and stopped at 0.4.1.
-Fetching a binary and asking to install it is behaviourally what a dropper does,
-so Play Protect classified a correctly signed release as harmful, and Google's
-enhanced fraud protection blocks sideloading altogether for apps holding
-`REQUEST_INSTALL_PACKAGES` — a phone that cannot install is a phone that can
-never be updated again. Handing off to the browser costs two taps and gives up
-verifying the download automatically; the banner prints the expected SHA-256 so
-you can still check it against the `.sha256` on the release.
+**Your phone may call this app unsafe, and here is why.** To install its own
+updates it holds `REQUEST_INSTALL_PACKAGES`, and an app that downloads a binary
+and asks to install it looks — as behaviour — exactly like malware that does the
+same thing. Play Protect scores behaviour, not intent, so a correctly signed
+release can be met with "Unsafe app blocked". **More details → Install anyway**
+gets past it, and the `.sha256` on each release lets you confirm you have the
+file this repository built. If your phone blocks the install outright with no way
+through, that is Google's enhanced fraud protection, which cannot be overridden —
+download the APK from the release page in a browser instead.
 
 ## The figures on the slate
 

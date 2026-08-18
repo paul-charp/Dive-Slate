@@ -92,7 +92,7 @@ android/app/
   MainActivity.kt     share intake, the intent handling described below
   SlatePainter.kt     paints core's display list onto a Canvas
   SlateFiles.kt       MediaStore export, FileProvider
-  UpdateCheck.kt      update notice: manifest fetch, version compare, hand-off
+  UpdateCheck.kt      self-update: manifest, download, checksum, installer
   ui/DiveSlateApp.kt  Compose UI
 
 tools/
@@ -277,22 +277,25 @@ procedure; this is what cost time.
   publish a build without offering it to every installed copy.
 - The updater is **framework-only** — `org.json` and `HttpURLConnection` — so it
   adds no dependency to the APK and needs no R8 keep rule.
-- **The app does not install its own updates any more, and must not start
-  again.** It downloaded the APK, verified it against the manifest checksum and
-  handed it to the package installer until 0.4.0. Downloading a binary and
-  asking to install it is, as *behaviour*, what a dropper does — Play Protect
-  scores behaviour, not intent, and a certificate it has never seen on a build
-  with a handful of installs has nothing on the other side of the scale. A
-  correctly signed release was refused with "Unsafe app blocked". Worse is the
-  variant nobody can tap through: Google's enhanced fraud protection blocks
-  sideloading outright for apps declaring `REQUEST_INSTALL_PACKAGES`, and a
-  phone that cannot install is a phone that can never be updated again.
-  `UpdateCheck` now opens the release page and the browser does the rest, which
-  makes the *browser* the unknown source Android asks about. The cost is real
-  and was accepted deliberately: two more taps, and checksum verification
-  demoted from enforced to displayed. Adding the permission back to recover
-  either would buy back the block. (It was already Play-restricted, so it would
-  have had to go if this ever reached the Play Store.)
+- **`REQUEST_INSTALL_PACKAGES` is Play-restricted.** If this app ever goes to the
+  Play Store, the self-updater goes with it.
+- **Play Protect flags the self-updater, and that was weighed and accepted — do
+  not remove it again.** Downloading a binary and asking Android to install it
+  is, as *behaviour*, what a dropper does; behaviour is what gets scored, and a
+  certificate with no history on a build with a handful of installs has nothing
+  on the other side. 0.4.0 was refused with "Unsafe app blocked". 0.4.1 removed
+  the permission and handed off to the browser instead; 0.4.3 put it back, at
+  the user's preference, because two extra taps and a checksum demoted from
+  enforced to displayed cost more than the warning does. The full hand-off
+  implementation is in the history at `80d3473`, reverted by `git revert`, if it
+  is ever wanted again.
+
+  What the warning costs is worth knowing precisely, because the two variants
+  are not the same: "Unsafe app blocked" can be tapped through with **More
+  details → Install anyway**, but Google's enhanced fraud protection *blocks
+  sideloading outright* for apps declaring this permission, and there is no
+  override. Where that is enforced, a phone which has the app can never update
+  it in place. That is the failure mode this trade accepts.
 - **`InputStream.readNBytes` is API 33 on Android**, and `minSdk` is 29. It
   compiles without a murmur and throws `NoSuchMethodError` on Android 10–12.
   Framework methods that look like ordinary Java still need their API level
