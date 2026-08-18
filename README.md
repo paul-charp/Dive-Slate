@@ -122,13 +122,16 @@ Three independent controls, broadest first:
 
 | | what it decides | choices |
 |---|---|---|
-| **Style** | how the slate is drawn — the art direction | `modern` |
+| **Style** | how the slate is drawn — the art direction | nine, below |
 | **Layout** | how it is proportioned — where things go, how big | Wide, Tall, Compact, Watch |
-| **Theme** | what colour it is | nine palettes |
+| **Theme** | what colour it is | 32 palettes, 2–9 per style |
 
 They compose: every layout works with every style. A style carries its own
 palettes, because a palette is validated against the marks it will be painted
-as — so picking a style is what decides which themes are on offer.
+as — so picking a style is what decides which themes are on offer. Every style
+offers at least one dark and one light palette, and switching style keeps
+whichever you had: that choice is about the footage the slate lands on, which
+the incoming style knows nothing about.
 
 Also adjustable: which elements appear, which figures are shown, and the scrim
 panel's opacity.
@@ -142,10 +145,33 @@ The slider moves the scrim panel and nothing else, and it is clamped to a
 per-theme floor computed from ink contrast against the worst possible backdrop.
 
 Fading the marks themselves would void the contrast the palette gates enforce
-and turn the deliberately-unthemed hazard red into a pink suggestion. Two tests
-hold that line.
+and turn the hazard colour into a suggestion. Two tests hold that line.
+
+A style that paints its own opaque card paints it *as* the scrim, so the slider
+still works there — and the floor still binds. On the violet card it stops at
+91%, because lime ink needs nearly the whole card to stay legible over bright
+footage.
 
 </details>
+
+## Nine styles
+
+Same dive, same figures, nine ways of drawing them.
+
+| | |
+|---|---|
+| **Modern** | Flat and geometric. Reads as instrumentation. The default. |
+| **Wrapped** | One loud opaque card, sparkles in the corners. Made to be posted. |
+| **Sticker** | Rounded and ringed, the profile drawn as a warm-to-cool ramp. |
+| **Magazine** | Masthead rules and condensed figures, no card of its own. |
+| **Frosted** | Two-stop glass with a lit edge, smoked or misted. |
+| **HUD** | A cut-cornered panel, a dot field, a trace that glows. |
+| **Dive computer** | A bezel and a segment screen; the trace drawn as steps. |
+| **Survey** | Grained paper, a labelled depth grid, hachures under the line. |
+| **Material** | A tonal card: header row, each figure in a tonal chip. |
+
+Type comes from Android's own families rather than bundled faces — the APK
+carries no fonts.
 
 ## The figures
 
@@ -195,10 +221,10 @@ has no gradient factors and must not appear to.
 
 </details>
 
-## Nine themes
+## Thirty-two palettes
 
-Generated and machine-checked rather than chosen, and grouped by the footage
-they are for:
+Generated and machine-checked rather than chosen. Modern's nine are grouped by
+the footage they are for:
 
 | for dark footage | for pale backgrounds |
 |---|---|
@@ -206,27 +232,70 @@ they are for:
 
 Each is derived from one base hue: that becomes the depth curve, and the
 gas-switch accent is then found by searching the hue circle for the colour that
-separates best from both the curve and the deco-ceiling red. Every palette is
-validated for colour-vision-deficiency separation, chroma, lightness and
-contrast before it ships — arithmetic that runs at design time, so the app ships
-only the answers.
+separates best from both the curve and the deco-ceiling red. The other eight
+styles bring their own — a violet card and a yellow one, two panes of glass,
+three dive-computer screens, a cream survey sheet and a blueprint, and eight
+Material schemes across four seeds.
 
-The ceiling red is deliberately **not** themed. A hazard colour that shifts with
-the palette stops reading as a hazard.
+Every palette is validated for colour-vision-deficiency separation, chroma,
+lightness and contrast before it ships — arithmetic that runs at design time, so
+the app ships only the answers, and a palette that fails stops the build rather
+than reaching a screen.
 
 <details>
-<summary><strong>Why there are no warm or green palettes</strong></summary>
+<summary><strong>Three sets of gates, not one</strong></summary>
 
 <br>
 
-Only hues from roughly **180° to 330°** work — cyan through blue, violet and
-magenta. Warm and green bases collide with the fixed red ceiling: a green curve
-looks maximally different from red to normal vision (ΔE 24) but measures **2.2**
-under protanopia, which is no separation at all.
+"Passes" means nothing without saying which bar it cleared, so each palette
+records its own:
+
+- **chromatic** — the original bar. Modern's nine.
+- **expressive** — a wider lightness band, and only for a style that paints its
+  own opaque card. The band exists because a mark on a transparent slate lands
+  on footage of unknown brightness; a style supplying its own background has
+  already settled that. The colour-vision floors do not move.
+- **monochrome** — for a palette that is one ink on purpose, like the segment
+  screen or the masthead. Checks that measure difference *between* marks do not
+  apply there, so the contrast floor turns strict in exchange, and what tells the
+  ceiling from the profile is checked in the renderer instead: it must be hatched
+  and dashed.
+
+</details>
+
+<details>
+<summary><strong>Why Modern has no warm or green palettes</strong></summary>
+
+<br>
+
+Only hues from roughly **180° to 330°** work for a palette built the way
+Modern's are — one hue sharing a picture with a fixed red ceiling. Warm and
+green bases collide with that red: a green curve looks maximally different to
+normal vision (ΔE 24) but measures **2.2** under protanopia, which is no
+separation at all.
 
 The sRGB gamut is also not a cylinder, so asking for a fixed chroma across hues
 silently desaturates cyan below the floor. The generator sweeps for the
 lightness at which each hue holds the most chroma instead.
+
+</details>
+
+<details>
+<summary><strong>Why some styles re-colour the deco ceiling</strong></summary>
+
+<br>
+
+The ceiling used to be a fixed red everywhere, on the grounds that a hazard
+colour which shifts with the palette stops reading as a hazard. It still is in
+every Modern palette. But the colour was never carrying the hazard alone: the
+region is hatched and its edge is a dashed step, and neither of those depends on
+hue.
+
+So a style may substitute — white on the violet card, amber on the HUD, screen
+ink on the LCD — provided the substitute is *measured against the card it lands
+on*. White on the yellow card came out at 1.43:1 and went back to a red. What
+none of them may drop is the hatch or the dash, which is where the meaning went;
+tests fail a style that tries.
 
 </details>
 
