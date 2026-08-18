@@ -34,7 +34,7 @@ tools/         Python. Palette maths and the generators for Themes.kt.
 ## Commands
 
 ```bash
-cd android && ./gradlew core:test          # 40 tests, no device needed
+cd android && ./gradlew core:test          # 52 tests, no device needed
 cd android && ./gradlew :app:installDebug
 cd android && ./gradlew :app:assembleRelease   # signed if keystore.properties
                                                # is present, debug key if not —
@@ -84,7 +84,9 @@ android/core/
   Xml.kt              DOM wrapper; refuses any document declaring a DOCTYPE
   Themes.kt           generated — nine palettes as constants, do not hand-edit
   Slate.kt            the display list core emits
-  OverlayRenderer.kt  the slate layout (wide + tall)
+  SlateStyle.kt       the three axes: SlateLayout + LayoutMetrics, SlateStyle
+  ModernStyle.kt      the default style — the drawing itself
+  OverlayRenderer.kt  what the styles share: options, stats, envelope, entry point
 
 android/app/
   MainActivity.kt     share intake, the intent handling described below
@@ -108,6 +110,43 @@ docs/RELEASING.md     the keystore, the secrets, and what each refusal protects
 `core` emits the slate as a **display list**, not as pixels, and `app` merely
 paints it. That split is what makes the interesting code testable without a
 device — including all of the geometry.
+
+## Style, layout, theme are three axes, not one setting
+
+The look is chosen along three independent controls, and they are separated
+because they answer different questions:
+
+* **Layout** — where things go and how big they are. `SlateLayout` is a row of
+  proportions quoted at 1080px, and `metrics(width)` scales them. It contains no
+  drawing.
+* **Style** — how the marks are drawn. The art direction. `ModernStyle` is the
+  only one so far, and it is the whole of the current renderer.
+* **Theme** — what colour it is. A palette that cleared the gates in
+  `tools/palette.py`.
+
+Two rules make that structure worth having rather than just more indirection,
+and both are held by `SlateStyleTest`:
+
+**Every layout works for every style.** A style must not decide its own
+proportions — it reads `LayoutMetrics` and sizes its details through
+`metrics.px()`. The moment a style hard-codes a padding, a layout added later
+silently stops applying to it, and the test that renders the full cross-product
+cannot see it because the slate still draws.
+
+**A style carries its themes.** A palette is validated against the *marks it
+will be painted as* — the curve, the ceiling and the accent, measured as a set —
+so it belongs to the style that paints them, not to the app. `renderOverlay`
+**refuses** a palette outside `style.themes` rather than substituting one:
+substituting would hide precisely the mismatch the rule exists to catch. The UI
+reconciles deliberately, through `SlateStyle.adopt`, which keeps the dark/light
+choice because that is a statement about the footage the slate will land on and
+the incoming style knows nothing about it.
+
+A second style with its own palettes needs its own generated list — `Themes.kt`
+would grow one alongside `SLATE_THEMES`, from `tools/`. Do not let a new style
+borrow `SLATE_THEMES` because the names happen to be there; if its marks differ
+enough to be a different style, they differ enough to move the ΔE measurements
+that justified those colours.
 
 ## The fixtures are the contract
 

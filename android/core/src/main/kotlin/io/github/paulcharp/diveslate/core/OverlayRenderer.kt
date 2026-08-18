@@ -1,21 +1,18 @@
 package io.github.paulcharp.diveslate.core
 
-import java.time.format.DateTimeFormatter
 import java.util.Locale
-import kotlin.math.abs
-import kotlin.math.max
 import kotlin.math.roundToInt
 
 /**
- * The compact slate: a badge to drop over a photo or a video frame.
+ * What every style is asked for, and what every style is given.
  *
- * This is a different object from a chart, not a smaller version of one. A
- * chart is something you read axis values off; this is a badge — the profile
- * silhouette as a recognisable shape, three big numbers, nothing else. At a
- * third of frame width on a phone, axis ticks and a legend are unreadable
- * noise, so they are gone rather than shrunk.
+ * The slate is a badge to drop over a photo or a video frame. It is a different
+ * object from a chart, not a smaller version of one: a chart is something you
+ * read axis values off; this is the profile silhouette as a recognisable shape,
+ * three big numbers, nothing else. At a third of frame width on a phone, axis
+ * ticks and a legend are unreadable noise, so they are gone rather than shrunk.
  *
- * Three constraints from the medium drive the layout:
+ * Three constraints from the medium bind every style, however it draws:
  *
  * * **The backdrop is arbitrary and moving.** Halos handle a still photo; they
  *   are not enough over video where the frame behind a label changes every few
@@ -25,10 +22,9 @@ import kotlin.math.roundToInt
  * * **Its own size is the deliverable.** The slate renders at its natural
  *   compact size so it can be dragged around in an editor.
  *
- * Ported from the retired Python implementation.
+ * This file holds what the styles share — the options, the summary figures and
+ * the series reduction. The drawing lives in the style; see [SlateStyle].
  */
-
-enum class SlateLayout { WIDE, TALL }
 
 /** Shape and content of the compact slate. */
 data class OverlayOptions(
@@ -36,7 +32,12 @@ data class OverlayOptions(
      * Slate width in pixels. 1080 matches Instagram's native width, so a slate
      * dropped in at full width stays pixel-crisp.
      */
-    val width: Float = 1080f,
+    val width: Float = SlateLayout.REFERENCE_WIDTH,
+    /** The art direction: how the marks are drawn. */
+    val style: SlateStyle = ModernStyle,
+    /** The proportions: where things go and how big they are. */
+    val layout: SlateLayout = SlateLayout.WIDE,
+    /** The palette. Must be one [style] offers — see [SlateStyle.themes]. */
     val theme: SlateTheme = SLATE,
     val showScrim: Boolean = true,
     val showSite: Boolean = true,
@@ -53,7 +54,6 @@ data class OverlayOptions(
     /** Which summary values to show, in order. `null` picks automatically. */
     val stats: List<String>? = null,
     val maxStats: Int = 3,
-    val layout: SlateLayout = SlateLayout.WIDE,
     val cornerRadius: Float = 30f,
     /**
      * Scrim opacity, or `null` to use the theme's own.
@@ -65,9 +65,20 @@ data class OverlayOptions(
      * panel has stopped doing its job.
      */
     val scrimAlpha: Float? = null,
-)
+) {
+    /** This slate's proportions in pixels. */
+    val metrics: LayoutMetrics get() = layout.metrics(width)
 
-private val DATE_LABEL = DateTimeFormatter.ofPattern("dd MMM yyyy", Locale.ENGLISH)
+    /**
+     * The scrim opacity to paint, clamped to the theme's legibility floor.
+     *
+     * Resolved here rather than in each style so that no style can ship a panel
+     * fainter than the value at which ink stops clearing 4.5:1 on the worst
+     * possible backdrop.
+     */
+    val resolvedScrimAlpha: Float
+        get() = (scrimAlpha ?: theme.scrimAlphaNominal).coerceIn(theme.scrimAlphaMin, 1f)
+}
 
 /** `(label, value, unit)` for one summary figure. */
 data class SlateStat(val label: String, val value: String, val unit: String)
@@ -120,6 +131,17 @@ private val STAT_BUILDERS: Map<String, (Dive) -> SlateStat?> = mapOf(
 )
 
 val STAT_KEYS: List<String> = STAT_BUILDERS.keys.toList()
+
+/**
+ * The figures this slate shows, in order.
+ *
+ * Shared across styles on purpose: which numbers are worth printing is a fact
+ * about the dive log, not about the art direction. How they are typeset is the
+ * style's business.
+ */
+internal fun resolveStats(dive: Dive, options: OverlayOptions): List<SlateStat> =
+    options.stats?.let { namedStats(dive, it) }
+        ?: autoStats(dive, options.maxStats, allowDeco = options.showDeco)
 
 /**
  * Most headline-worthy first.
@@ -196,269 +218,25 @@ internal fun withAlpha(argb: Long, alpha: Float): Long {
     return (a shl 24) or (argb and 0x00FFFFFFL)
 }
 
-/** Render the compact slate to a resolved list of drawing operations. */
+/**
+ * Render the compact slate to a resolved list of drawing operations.
+ *
+ * The entry point for every style, so that the two things which must hold
+ * whatever the art direction hold in exactly one place: a dive with no profile
+ * is refused rather than drawn empty, and a style is never handed a palette it
+ * does not own.
+ */
 fun renderOverlay(dive: Dive, options: OverlayOptions = OverlayOptions()): Slate {
     require(dive.samples.isNotEmpty()) {
         "this dive has no depth samples, so there is no profile to draw"
     }
-
-    val theme = options.theme
-    val stats = options.stats?.let { namedStats(dive, it) }
-        ?: autoStats(dive, options.maxStats, allowDeco = options.showDeco)
-
-    // Everything scales off the slate width so the design holds at any size;
-    // the layout then chooses the proportions within that.
-    val scale = options.width / 1080f
-    val tall = options.layout == SlateLayout.TALL
-
-    val pad = (if (tall) 56f else 44f) * scale
-    val siteSize = (if (tall) 46f else 34f) * scale
-    val dateSize = (if (tall) 28f else 22f) * scale
-    val valueSize = (if (tall) 86f else 56f) * scale
-    val labelSize = (if (tall) 24f else 18f) * scale
-    val curveHeight = (if (tall) 430f else 210f) * scale
-    val gap = (if (tall) 34f else 26f) * scale
-
-    val showSite = options.showSite && !dive.site.isNullOrEmpty()
-    val showDate = options.showDate && dive.whenLogged != null
-    val hasHeading = showSite || showDate
-
-    var headingBlock = 0f
-    if (hasHeading) {
-        if (showSite) headingBlock += siteSize
-        if (showDate) headingBlock += dateSize + 8f * scale
-        headingBlock += gap
+    // Not a formality. A palette is validated against the marks it will be
+    // painted as, so one borrowed from another style has cleared the gates for
+    // a picture nobody is drawing. Substituting quietly would hide that; the
+    // caller reconciles deliberately, with SlateStyle.adopt.
+    require(options.theme in options.style.themes) {
+        "palette ${options.theme.name} is not offered by the ${options.style.id} style, " +
+            "which offers ${options.style.themes.joinToString { it.name }}"
     }
-
-    val statsBlock = valueSize + labelSize + 10f * scale
-    val height = pad + headingBlock + curveHeight + gap + statsBlock + pad
-
-    val ops = mutableListOf<SlateOp>()
-
-    if (options.showScrim) {
-        // The slider moves this panel and nothing else, and cannot take it below
-        // the opacity at which ink stops clearing 4.5:1 on the worst backdrop.
-        val alpha = (options.scrimAlpha ?: theme.scrimAlphaNominal)
-            .coerceIn(theme.scrimAlphaMin, 1f)
-        ops.add(
-            SlateOp.Rect(
-                x = 0f, y = 0f, width = options.width, height = height,
-                cornerRadius = options.cornerRadius * scale,
-                fill = SlateFill.Solid(withAlpha(theme.scrim, alpha)),
-            )
-        )
-    }
-
-    // ---- heading -----------------------------------------------------------
-    var y = pad
-    if (showSite) {
-        y += siteSize * 0.78f
-        ops.add(
-            SlateOp.Text(
-                text = dive.site!!.uppercase(),
-                x = pad, baselineY = y, sizePx = siteSize,
-                fillArgb = theme.ink, haloArgb = theme.halo, haloWidth = 5f * scale,
-                bold = true, letterSpacingEm = 0.02f,
-            )
-        )
-        y += siteSize * 0.32f
-    }
-    if (showDate) {
-        y += dateSize * 0.9f
-        ops.add(
-            SlateOp.Text(
-                text = dive.whenLogged!!.format(DATE_LABEL),
-                x = pad, baselineY = y, sizePx = dateSize,
-                fillArgb = theme.inkSecondary, haloArgb = theme.halo, haloWidth = 4f * scale,
-            )
-        )
-    }
-    if (hasHeading) y = pad + headingBlock
-
-    // ---- profile -----------------------------------------------------------
-    val plotLeft = pad
-    val plotRight = options.width - pad
-    val plotTop = y
-    val plotWidth = plotRight - plotLeft
-
-    val duration = max(dive.computedDurationSeconds, 1.0)
-    // Headroom so the deepest point does not touch the baseline.
-    val depthMax = max(dive.computedMaxDepthMetres, 1.0) * 1.06
-
-    fun sx(t: Double): Float = plotLeft + (t / duration).toFloat() * plotWidth
-    fun sy(d: Double): Float = plotTop + (d / depthMax).toFloat() * curveHeight
-
-    // Surface line: the reference the silhouette is read against, and the only
-    // piece of chrome that survives into the badge. The depth axis always starts
-    // at the surface, so this is where zero is.
-    ops.add(
-        SlateOp.Line(
-            start = Pt(plotLeft, plotTop), end = Pt(plotRight, plotTop),
-            argb = theme.axis, strokeWidth = 2f * scale,
-        )
-    )
-
-    if (options.showCeiling) {
-        ops.addAll(ceilingOps(dive, ::sx, ::sy, plotTop, theme, scale))
-    }
-
-    val points = envelope(dive.samples.map { Pt(sx(it.timeSeconds), sy(it.depthMetres)) }, plotWidth)
-    val area = buildList {
-        add(Pt(points.first().x, plotTop))
-        addAll(points)
-        add(Pt(points.last().x, plotTop))
-    }
-    ops.add(
-        SlateOp.Path(
-            points = area, closed = true,
-            fill = SlateFill.Vertical(theme.curveFillTop, theme.curveFillBottom),
-        )
-    )
-    ops.add(
-        SlateOp.Path(
-            points = points, closed = false,
-            strokeArgb = theme.curve, strokeWidth = 4f * scale,
-        )
-    )
-
-    if (options.showGas) {
-        ops.addAll(gasOps(dive, ::sx, ::sy, theme, scale))
-    }
-
-    // ---- stats -------------------------------------------------------------
-    val statsY = plotTop + curveHeight + gap + valueSize * 0.8f
-    val slot = (options.width - pad * 2) / max(stats.size, 1)
-    for ((index, stat) in stats.withIndex()) {
-        val left = pad + index * slot
-        ops.add(
-            SlateOp.Text(
-                text = stat.value, x = left, baselineY = statsY, sizePx = valueSize,
-                fillArgb = theme.ink, haloArgb = theme.halo, haloWidth = 6f * scale,
-                bold = true,
-            )
-        )
-        if (stat.unit.isNotEmpty()) {
-            // Advance estimated from character count, as the Python does. The
-            // SVG writer could not measure text at all; a real measurement pass
-            // belongs here later, and would only tighten this.
-            ops.add(
-                SlateOp.Text(
-                    text = stat.unit,
-                    x = left + stat.value.length * valueSize * 0.56f + 8f * scale,
-                    baselineY = statsY, sizePx = labelSize * 1.35f,
-                    fillArgb = theme.inkSecondary, haloArgb = theme.halo,
-                    haloWidth = 4f * scale,
-                )
-            )
-        }
-        ops.add(
-            SlateOp.Text(
-                text = stat.label.uppercase(),
-                x = left, baselineY = statsY + labelSize + 8f * scale, sizePx = labelSize,
-                fillArgb = theme.inkMuted, haloArgb = theme.halo, haloWidth = 4f * scale,
-                bold = true, letterSpacingEm = 0.10f,
-            )
-        )
-    }
-
-    return Slate(width = options.width, height = height, ops = ops)
-}
-
-/** Stepped deco ceiling, hatched — the same reading as the full chart's. */
-private fun ceilingOps(
-    dive: Dive,
-    sx: (Double) -> Float,
-    sy: (Double) -> Float,
-    plotTop: Float,
-    theme: SlateTheme,
-    scale: Float,
-): List<SlateOp> {
-    val runs = mutableListOf<List<Sample>>()
-    var current = mutableListOf<Sample>()
-    for (sample in dive.samples) {
-        val ceiling = sample.stopDepthMetres
-        if (ceiling != null && ceiling != 0.0) {
-            current.add(sample)
-        } else if (current.isNotEmpty()) {
-            runs.add(current)
-            current = mutableListOf()
-        }
-    }
-    if (current.isNotEmpty()) runs.add(current)
-    if (runs.isEmpty()) return emptyList()
-
-    val hatch = SlateFill.Hatch(
-        argb = theme.ceiling, spacing = 9f * scale, strokeWidth = 1.8f * scale,
-    )
-
-    val ops = mutableListOf<SlateOp>()
-    for (run in runs) {
-        val edge = mutableListOf<Pt>()
-        var previous: Float? = null
-        for (sample in run) {
-            val x = sx(sample.timeSeconds)
-            val y = sy(sample.stopDepthMetres ?: 0.0)
-            // Square the corner rather than sloping it: a ceiling steps.
-            if (previous != null && y != previous) edge.add(Pt(x, previous))
-            edge.add(Pt(x, y))
-            previous = y
-        }
-        if (edge.isEmpty()) continue
-
-        val polygon = buildList {
-            add(Pt(edge.first().x, plotTop))
-            addAll(edge)
-            add(Pt(edge.last().x, plotTop))
-        }
-        ops.add(SlateOp.Path(points = polygon, closed = true, fill = hatch))
-        ops.add(
-            SlateOp.Path(
-                points = edge, closed = false,
-                strokeArgb = theme.ceiling, strokeWidth = 2.5f * scale,
-            )
-        )
-    }
-    return ops
-}
-
-/**
- * Gas-switch markers, each with the mix name printed beside it.
- *
- * The label is not optional. The accent colour sits below 3:1 contrast in some
- * palettes, which is permitted *only* because the text carries the identity —
- * drop the label to reduce clutter and the mark becomes one that colour alone
- * has to distinguish, which it cannot do under colour-vision deficiency.
- */
-private fun gasOps(
-    dive: Dive,
-    sx: (Double) -> Float,
-    sy: (Double) -> Float,
-    theme: SlateTheme,
-    scale: Float,
-): List<SlateOp> {
-    if (dive.samples.isEmpty()) return emptyList()
-    val ops = mutableListOf<SlateOp>()
-
-    for (switch in dive.gasSwitches) {
-        val nearest = dive.samples.minBy { abs(it.timeSeconds - switch.timeSeconds) }
-        val x = sx(switch.timeSeconds)
-        val y = sy(nearest.depthMetres)
-
-        ops.add(
-            SlateOp.Circle(
-                centre = Pt(x, y), radius = 8f * scale,
-                strokeArgb = theme.halo, strokeWidth = 4f * scale,
-            )
-        )
-        ops.add(SlateOp.Circle(centre = Pt(x, y), radius = 8f * scale, fillArgb = theme.accent))
-        ops.add(
-            SlateOp.Text(
-                text = switch.gas.name,
-                x = x + 12f * scale, baselineY = y - 12f * scale, sizePx = 20f * scale,
-                fillArgb = theme.ink, haloArgb = theme.halo, haloWidth = 4f * scale,
-                bold = true,
-            )
-        )
-    }
-    return ops
+    return options.style.render(dive, options)
 }

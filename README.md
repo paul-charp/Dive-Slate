@@ -32,8 +32,20 @@ The slate itself is a profile silhouette, the site name, and a few big numbers.
 No axes and no legend: at a third of frame width on a phone those are unreadable
 noise rather than information.
 
-Adjustable: palette, wide or tall layout, which elements appear, which figures
-are shown, and the scrim panel's opacity.
+The look is chosen along three axes, broadest first:
+
+| | what it decides | choices |
+|---|---|---|
+| **Style** | how the slate is drawn — the art direction | `modern` |
+| **Layout** | how it is proportioned — where things go, how big | Wide, Tall |
+| **Theme** | what colour it is | nine palettes, see [Themes](#themes) |
+
+They compose: every layout works with every style. A style carries its own
+palettes, because a palette is validated against the marks it will be painted
+as — so picking a style is what decides which themes are on offer.
+
+Also adjustable: which elements appear, which figures are shown, and the scrim
+panel's opacity.
 
 **The opacity control moves the panel and nothing else.** Ink is never faded, and
 the slider is clamped to a per-theme floor computed from ink contrast against the
@@ -102,7 +114,9 @@ has no gradient factors and must not appear to.
 
 ## Themes
 
-Nine, generated and machine-checked rather than chosen:
+Nine, generated and machine-checked rather than chosen. They belong to the
+`modern` style, which is the one that paints the marks they were validated
+against:
 
 | for dark footage | for pale backgrounds |
 |---|---|
@@ -142,7 +156,7 @@ in `android/local.properties`. The wrapper fetches its own Gradle. Android Studi
 is **not** required; it is only needed for the IDE and the emulator GUI.
 
 ```bash
-cd android && ./gradlew core:test          # 40 tests, no device
+cd android && ./gradlew core:test          # 52 tests, no device
 cd android && ./gradlew :app:assembleRelease
 ```
 
@@ -163,8 +177,9 @@ against.
 
 ```
 android/       the app. core/ is plain Kotlin/JVM — units, models, both
-               parsers, palettes, the slate layout — and builds with only a
-               JDK. app/ is Compose, the Canvas painter, intents, export.
+               parsers, palettes, the styles and layouts — and builds with
+               only a JDK. app/ is Compose, the Canvas painter, intents,
+               export.
 
 conformance/   the fixtures core/ is tested against: full parsed models for
                each log, a table-driven spec for the unit grammar, synthetic
@@ -213,8 +228,8 @@ the intent filters.
 
 ## Known gaps
 
-- Settings do not persist across launches: palette, format, opacity and figure
-  choices reset every time.
+- Settings do not persist across launches: style, layout, palette, opacity and
+  figure choices reset every time.
 - No background-media picker, so the palette cannot yet be judged against your
   own footage — only against the checkerboard.
 - No library. Every incoming log is already copied to `filesDir/logs/` with a

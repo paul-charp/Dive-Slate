@@ -44,7 +44,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -69,10 +68,11 @@ import io.github.paulcharp.diveslate.UpdateCheck
 import io.github.paulcharp.diveslate.core.Dive
 import io.github.paulcharp.diveslate.core.DiveLog
 import io.github.paulcharp.diveslate.core.OverlayOptions
-import io.github.paulcharp.diveslate.core.SLATE_THEMES
+import io.github.paulcharp.diveslate.core.SLATE_STYLES
 import io.github.paulcharp.diveslate.core.Slate
 import io.github.paulcharp.diveslate.core.SlateLayout
 import io.github.paulcharp.diveslate.core.SlateTheme
+import io.github.paulcharp.diveslate.core.adopt
 import io.github.paulcharp.diveslate.core.ceilMetres
 import io.github.paulcharp.diveslate.core.formatMinutes
 import io.github.paulcharp.diveslate.core.renderOverlay
@@ -527,10 +527,17 @@ private fun Editor(
     onSaveToGallery: (SlateExport, String) -> Unit,
 ) {
     val log = state.log
-    var themeIndex by remember { mutableIntStateOf(0) }
-    var tall by remember { mutableStateOf(false) }
+
+    // The three axes the slate is chosen along, in the order they narrow: the
+    // style decides how it is drawn and therefore which palettes exist, the
+    // layout decides its proportions, the theme decides its colour.
+    val initialStyle = SLATE_STYLES.first()
+    var style by remember { mutableStateOf(initialStyle) }
+    var layout by remember { mutableStateOf(SlateLayout.WIDE) }
+    var theme by remember { mutableStateOf(initialStyle.defaultTheme) }
+
     var showBackdrop by remember { mutableStateOf(true) }
-    var opacity by remember { mutableFloatStateOf(SLATE_THEMES[0].scrimAlphaNominal) }
+    var opacity by remember { mutableFloatStateOf(initialStyle.defaultTheme.scrimAlphaNominal) }
 
     var showSite by remember { mutableStateOf(true) }
     var showDate by remember { mutableStateOf(false) }
@@ -539,7 +546,6 @@ private fun Editor(
     var showGas by remember { mutableStateOf(false) }
     var chosenStats by remember { mutableStateOf(emptySet<String>()) }
 
-    val theme = SLATE_THEMES[themeIndex]
     // getOrNull rather than an index: an empty log is rejected at load, but a
     // crash here would be a blank screen with no way back, and coerceIn(0, -1)
     // on an empty list throws rather than clamping.
@@ -558,15 +564,16 @@ private fun Editor(
     val minOpacity = theme.scrimAlphaMin
 
     val slate = remember(
-        dive, theme, tall, opacity, showSite, showDate, showScrim,
+        dive, style, layout, theme, opacity, showSite, showDate, showScrim,
         showCeiling, showGas, chosenStats,
     ) {
         runCatching {
             renderOverlay(
                 dive,
                 OverlayOptions(
+                    style = style,
+                    layout = layout,
                     theme = theme,
-                    layout = if (tall) SlateLayout.TALL else SlateLayout.WIDE,
                     scrimAlpha = opacity.coerceAtLeast(minOpacity),
                     showScrim = showScrim,
                     showSite = showSite,
@@ -600,6 +607,54 @@ private fun Editor(
             )
         }
 
+        // ---- style ----------------------------------------------------------
+        // The broadest of the three axes, so it leads: it decides how the slate
+        // is drawn and therefore which palettes are even on offer below.
+        Label("Style")
+        ChipRow {
+            SLATE_STYLES.forEach { candidate ->
+                FilterChip(
+                    selected = candidate.id == style.id,
+                    onClick = {
+                        style = candidate
+                        // The palette follows the style rather than resetting:
+                        // the dark/light choice is a statement about the footage
+                        // this slate will land on, which the new style knows
+                        // nothing about.
+                        theme = candidate.adopt(theme)
+                        opacity = opacity.coerceAtLeast(theme.scrimAlphaMin)
+                    },
+                    label = { Text(candidate.label) },
+                )
+            }
+        }
+        Text(style.description, color = Muted, fontSize = 12.sp)
+
+        // ---- layout ---------------------------------------------------------
+        Label("Layout")
+        ChipRow {
+            SlateLayout.entries.forEach { candidate ->
+                FilterChip(
+                    selected = candidate == layout,
+                    onClick = { layout = candidate },
+                    label = { Text(candidate.label) },
+                )
+            }
+        }
+
+        // ---- palette --------------------------------------------------------
+        Label("Palette — for dark footage")
+        PaletteRow(style.themes.filter { it.isDark }, theme) { picked ->
+            theme = picked
+            opacity = opacity.coerceAtLeast(picked.scrimAlphaMin)
+        }
+
+        Label("Palette — for pale backgrounds")
+        PaletteRow(style.themes.filter { !it.isDark }, theme) { picked ->
+            theme = picked
+            opacity = opacity.coerceAtLeast(picked.scrimAlphaMin)
+        }
+
         // ---- panel opacity --------------------------------------------------
         Label("Panel opacity  ${(opacity.coerceIn(minOpacity, 1f) * 100).toInt()}%")
         Slider(
@@ -615,26 +670,6 @@ private fun Editor(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Switch(checked = showBackdrop, onCheckedChange = { showBackdrop = it })
             Text("  Checkerboard backdrop", color = Muted, fontSize = 14.sp)
-        }
-
-        // ---- palette --------------------------------------------------------
-        Label("Palette — for dark footage")
-        PaletteRow(SLATE_THEMES.filter { it.isDark }, theme) { picked ->
-            themeIndex = SLATE_THEMES.indexOf(picked)
-            opacity = opacity.coerceAtLeast(picked.scrimAlphaMin)
-        }
-
-        Label("Palette — for pale backgrounds")
-        PaletteRow(SLATE_THEMES.filter { !it.isDark }, theme) { picked ->
-            themeIndex = SLATE_THEMES.indexOf(picked)
-            opacity = opacity.coerceAtLeast(picked.scrimAlphaMin)
-        }
-
-        // ---- format ---------------------------------------------------------
-        Label("Format")
-        ChipRow {
-            FilterChip(selected = tall, onClick = { tall = true }, label = { Text("Tall") })
-            FilterChip(selected = !tall, onClick = { tall = false }, label = { Text("Wide") })
         }
 
         // ---- elements -------------------------------------------------------
