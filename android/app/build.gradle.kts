@@ -103,8 +103,8 @@ android {
         // versionCode is what the updater compares, and the release workflow
         // refuses a tag whose name disagrees with versionName. Both move
         // together; see docs/RELEASING.md.
-        versionCode = 16
-        versionName = "0.4.4"
+        versionCode = 17
+        versionName = "0.5.0"
     }
 
     signingConfigs {
