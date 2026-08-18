@@ -7,18 +7,18 @@ to be trustworthy in a way a store would otherwise enforce for you.
 ## Cutting a release
 
 Bump both numbers in [`android/app/build.gradle.kts`](../android/app/build.gradle.kts).
-The tree currently carries `versionCode = 11` / `versionName = "0.3.0"`, so the
+The tree currently carries `versionCode = 12` / `versionName = "0.4.0"`, so the
 release after this one is:
 
 ```kotlin
-versionCode = 12        // must increase; this is what the updater compares
-versionName = "0.3.1"   // must equal the tag without its leading v
+versionCode = 13        // must increase; this is what the updater compares
+versionName = "0.4.1"   // must equal the tag without its leading v
 ```
 
 Write what the release page should say, in `docs/release-notes/<tag>.md`:
 
 ```markdown
-# Dive Slate 0.3.1 — what this one is
+# Dive Slate 0.4.1 — what this one is
 
 Prose the reader actually wants…
 ```
@@ -33,7 +33,7 @@ bytes rather than about the app.
 Commit, then tag and push:
 
 ```bash
-git tag v0.3.1 && git push origin main v0.3.1
+git tag v0.4.1 && git push origin main v0.4.1
 ```
 
 That is the whole ritual. The `Release` workflow builds, signs, verifies and
@@ -41,7 +41,7 @@ publishes. It refuses to publish rather than publish something wrong:
 
 | Check | Why it exists |
 |---|---|
-| Tag matches `versionName` | Otherwise `v0.3.1` ships an APK whose start screen says 0.3.0 |
+| Tag matches `versionName` | Otherwise `v0.4.1` ships an APK whose start screen says 0.4.0 |
 | `versionCode` beats the published one | The updater compares numerically; a code that did not increase is an update nobody is ever offered |
 | `apksigner` says the cert is not `CN=Android Debug` | A debug-signed release installs cleanly, so nothing looks wrong until a properly signed update is refused by every phone that took it |
 | `core:test` | A tag can be pushed at a commit whose CI went red |
@@ -184,13 +184,13 @@ app needs no API call, no token and no knowledge of tag names:
 
 ```json
 {
-  "versionCode": 11,
-  "versionName": "0.3.0",
-  "tag": "v0.3.0",
-  "apkUrl": "https://github.com/paul-charp/Dive-Slate/releases/download/v0.3.0/dive-slate-0.3.0.apk",
+  "versionCode": 12,
+  "versionName": "0.4.0",
+  "tag": "v0.4.0",
+  "apkUrl": "https://github.com/paul-charp/Dive-Slate/releases/download/v0.4.0/dive-slate-0.4.0.apk",
   "apkSha256": "…",
   "apkSize": 1969054,
-  "releaseUrl": "https://github.com/paul-charp/Dive-Slate/releases/tag/v0.3.0"
+  "releaseUrl": "https://github.com/paul-charp/Dive-Slate/releases/tag/v0.4.0"
 }
 ```
 
