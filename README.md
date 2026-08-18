@@ -11,7 +11,7 @@
 [![Android 10+](https://img.shields.io/badge/Android-10%2B-3987E5)](#get-it)
 [![License: MIT](https://img.shields.io/badge/License-MIT-informational)](LICENSE)
 
-[**Download the APK**](https://github.com/paul-charp/Dive-Slate/releases/latest) · [Layouts](#four-layouts) · [Figures](#the-figures) · [Themes](#nine-themes)
+[**Download the APK**](https://github.com/paul-charp/Dive-Slate/releases/latest) · [A trip at a time](#a-trip-at-a-time) · [Layouts](#four-layouts) · [Figures](#the-figures) · [Themes](#nine-themes)
 
 </div>
 
@@ -25,7 +25,10 @@ a few big numbers, with no background behind them. Drop it on a stop photo, a
 video frame or a story and the shot still shows through.
 
 - 🤿 **Reads your real log.** Subsurface (`.ssrf`) or UDDF (`.uddf`), shared
-  straight in from Subsurface-mobile or picked out of your files.
+  straight in from Subsurface-mobile or picked out of your files — several
+  files at once, if a trip is split across them.
+- 🗂️ **A whole trip in one pass.** Pick as many dives as you like and they all
+  come out matching, drawn with the settings you chose once.
 - 🖼️ **Four layouts.** Full-frame strips, or corner badges small enough to stay
   out of the way of the shot.
 - 🎨 **Nine palettes**, each machine-checked for colour-blind separation and
@@ -62,9 +65,10 @@ one property that matters.
 <td width="28%"><img src="docs/images/app-controls.png" alt="The app: elements, figures and export"></td>
 <td>
 
-**The app.** Open a log and it lists the dives newest first — a single-dive log
-skips straight past that. Pick one and you get the preview, the three look
-controls, the elements and figures pickers, and an opacity slider.
+**The app.** Open a log and it lists the dives newest first, grouped by the file
+they came from — a single-dive log skips straight past that. Tap one and you get
+the preview, the three look controls, the elements and figures pickers, and an
+opacity slider.
 
 Figures are **automatic** by default: the app fills the layout's budget with
 whatever your log can answer, best first. Pick your own whenever you would
@@ -77,6 +81,27 @@ in a message.
 </td>
 </tr>
 </table>
+
+## A trip at a time
+
+Hold a dive in the list to start picking, then take as many as you want —
+**Select all**, or **All** on a file's heading to take just that trip. The
+editor previews them one at a time with `‹ ›` while every control applies to
+the whole set, so a trip's slates come out looking like a set rather than like
+twelve separate exports.
+
+Two things the batch is careful not to hide, because a slate that is quietly
+missing or quietly thinner than the one you designed is indistinguishable from
+a log that never recorded the dive:
+
+- **A dive with no depth samples cannot be drawn**, so the list refuses it and
+  says why on the row, rather than accepting it and dropping it later.
+- **A figure you picked that other dives never recorded** is counted up front —
+  *"GF is missing on 3 of 6"* — because you chose it while looking at one dive.
+
+Each slate lands as its own PNG, named for the export time, the dive number and
+the site. Sharing a batch works too, though most apps will only accept an image
+or two at once; the gallery takes all of them.
 
 ## Four layouts
 
@@ -340,13 +365,18 @@ the release page in a browser instead.
 | from | how |
 |---|---|
 | **Subsurface-mobile** | Export the dive and pick Dive Slate in the share sheet |
-| **A file on the phone** | Open it from the app, wherever it lives |
+| **A file on the phone** | Open it from the app, wherever it lives — several at once if you like |
 | **Neither** | The bundled sample dive, to see what the app does |
 
 | Format | Extensions | Notes |
 | --- | --- | --- |
 | Subsurface XML | `.ssrf`, `.xml` | sparse sample attributes are carried forward, as Subsurface itself does |
 | UDDF 3.x | `.uddf`, `.xml` | SI units, namespace-agnostic; mandatory deco stops only |
+
+Open more than one file and the dives stay grouped under the file they came
+from. Nothing is merged or de-duplicated: two exports overlapping is an ordinary
+accident, and dive numbers are per-logbook, so any attempt to spot a duplicate
+across files would be a guess.
 
 Detection reads file content, not the extension, so a renamed log still works.
 Subsurface's own database cannot be read directly — Android denies it to other
@@ -355,7 +385,8 @@ apps — so the export is the only route in, not a workaround.
 ## Known gaps
 
 - Settings do not persist across launches: style, layout, palette, opacity and
-  figure choices reset every time.
+  figure choices reset every time. They do hold across a batch and across
+  stepping between dives — it is only leaving the editor that forgets them.
 - No background-media picker, so the palette cannot yet be judged against your
   own footage — only against the checkerboard.
 - No library. Every incoming log is already copied to `filesDir/logs/`, and
@@ -374,7 +405,7 @@ in `android/local.properties`. The wrapper fetches its own Gradle. Android Studi
 is **not** required; it is only needed for the IDE and the emulator GUI.
 
 ```bash
-cd android && ./gradlew core:test          # 52 tests, no device
+cd android && ./gradlew core:test          # 68 tests, no device
 cd android && ./gradlew :app:assembleRelease
 ```
 
