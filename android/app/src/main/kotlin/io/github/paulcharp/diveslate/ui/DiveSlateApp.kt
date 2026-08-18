@@ -30,7 +30,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
@@ -76,7 +75,6 @@ import io.github.paulcharp.diveslate.core.adopt
 import io.github.paulcharp.diveslate.core.ceilMetres
 import io.github.paulcharp.diveslate.core.formatMinutes
 import io.github.paulcharp.diveslate.core.renderOverlay
-import java.io.File
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -115,18 +113,6 @@ sealed interface UpdateState {
     data object Checking : UpdateState
     data object UpToDate : UpdateState
     data class Available(val release: UpdateCheck.Release) : UpdateState
-    data class Downloading(val release: UpdateCheck.Release, val fraction: Float) : UpdateState
-    /**
-     * Downloaded and verified. [note] replaces the default explanation when the
-     * install could not be started yet — almost always because permission to
-     * install from this app has not been granted, which is a detour rather than
-     * a failure, so the state stays Ready and keeps its button.
-     */
-    data class Ready(
-        val release: UpdateCheck.Release,
-        val apk: File,
-        val note: String? = null,
-    ) : UpdateState
     data class Failed(val message: String) : UpdateState
 }
 
@@ -134,10 +120,8 @@ sealed interface UpdateState {
 data class Updates(
     val state: UpdateState,
     val onCheck: () -> Unit,
-    val onDownload: (UpdateCheck.Release) -> Unit,
-    // The whole state, so the installer never has to look up which release the
-    // file on disk belongs to.
-    val onInstall: (UpdateState.Ready) -> Unit,
+    /** Hand the release page to the browser; the download is its business. */
+    val onOpen: (UpdateCheck.Release) -> Unit,
     val onDismiss: () -> Unit,
 )
 
@@ -351,49 +335,26 @@ private fun UpdateBanner(updates: Updates, modifier: Modifier = Modifier) {
             is UpdateState.Available -> {
                 BannerRow(
                     title = "Dive Slate ${state.release.versionName} is available",
-                    detail = "${megabytes(state.release.apkSize)} download",
+                    detail = "${megabytes(state.release.apkSize)} — the release page opens in " +
+                        "your browser, which downloads and installs it",
                     onDismiss = updates.onDismiss,
                 )
                 Button(
-                    onClick = { updates.onDownload(state.release) },
+                    onClick = { updates.onOpen(state.release) },
                     modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
                 ) {
-                    Text("Download")
+                    Text("Open the release page")
                 }
-            }
-
-            is UpdateState.Downloading -> {
+                // The app used to verify the download itself and refuse a
+                // mismatch. It no longer holds the file, so the guarantee
+                // becomes an offer: here is the digest to check against, in
+                // full, because a truncated one cannot be compared.
                 Text(
-                    "Downloading ${state.release.versionName}…",
-                    color = OnSurface,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
+                    "SHA-256 ${state.release.apkSha256}",
+                    color = Muted,
+                    fontSize = 10.sp,
+                    modifier = Modifier.padding(top = 10.dp),
                 )
-                // Determinate, because the manifest carries the size. A bar that
-                // cannot say how far along it is turns a slow connection into an
-                // app that looks stuck.
-                LinearProgressIndicator(
-                    progress = { state.fraction },
-                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
-                )
-            }
-
-            is UpdateState.Ready -> {
-                BannerRow(
-                    title = "Dive Slate ${state.release.versionName} is ready to install",
-                    // Android asks for permission to install from this app the
-                    // first time, in Settings, and there is no way to prompt for
-                    // it inline — so say what is about to happen instead of
-                    // letting the installer appear to do nothing.
-                    detail = state.note ?: "Android will ask you to confirm the install",
-                    onDismiss = updates.onDismiss,
-                )
-                Button(
-                    onClick = { updates.onInstall(state) },
-                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
-                ) {
-                    Text("Install")
-                }
             }
 
             is UpdateState.Failed -> BannerRow(

@@ -53,8 +53,7 @@ class MainActivity : ComponentActivity() {
                 updates = Updates(
                     state = updateState,
                     onCheck = { checkForUpdate(announce = true) },
-                    onDownload = { release -> downloadUpdate(release) },
-                    onInstall = { ready -> installUpdate(ready.release, ready.apk) },
+                    onOpen = { release -> openRelease(release) },
                     onDismiss = { updateState = UpdateState.Idle },
                 ),
                 onLoadSample = { loadBundledSample() },
@@ -325,75 +324,24 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Fetch the APK, then verify it before anyone is asked to install it.
+     * Hand the release page to the browser.
      *
-     * The progress figure is updated from the download thread and read by
-     * Compose; that is safe because it only ever writes [updateState], and a
-     * dropped intermediate value costs a repaint of a progress bar.
-     */
-    private fun downloadUpdate(release: UpdateCheck.Release) {
-        updateState = UpdateState.Downloading(release, 0f)
-        lifecycleScope.launch {
-            val outcome = withContext(Dispatchers.IO) {
-                runCatching {
-                    UpdateCheck.download(this@MainActivity, release) { fraction ->
-                        updateState = UpdateState.Downloading(release, fraction)
-                    }
-                }
-            }
-            outcome
-                .onSuccess { apk ->
-                    updateState = UpdateState.Ready(release, apk)
-                    // Straight into the installer, since the download was an
-                    // explicit request and stopping to ask again would be a tap
-                    // for nothing. The Install button stays for the case below,
-                    // where the first attempt cannot proceed yet.
-                    installUpdate(release, apk)
-                }
-                .onFailure { e ->
-                    updateState = UpdateState.Failed(
-                        e.message ?: "the download failed (${e::class.simpleName})",
-                    )
-                }
-        }
-    }
-
-    /**
-     * Hand the verified APK to Android's installer.
+     * The whole of what the app does about an update now. It downloaded and
+     * installed the APK itself until 0.4.0, which needed REQUEST_INSTALL_PACKAGES
+     * and got a correctly signed release classified as harmful — the reasoning
+     * is on [UpdateCheck]. A browser is a far better-trusted unknown source than
+     * this app will ever be.
      *
-     * Installing from outside a store is a permission the user grants in
-     * Settings, per app, and it cannot be requested with a runtime prompt. So the
-     * first attempt on a fresh install typically cannot proceed: that is not an
-     * error, it is a detour, and the banner keeps its Install button for the
-     * return trip. Sending them to the right Settings page and saying why is the
-     * whole of the handling.
+     * Reported through updateState, never through the load state: anything
+     * routed via LoadState.withMessage becomes LoadState.Failed unless a log is
+     * already open, which would replace the whole screen with the "that did not
+     * load" page over a message about an update.
      */
-    private fun installUpdate(release: UpdateCheck.Release, apk: File) {
-        // Reported through updateState, never through the load state. Anything
-        // routed via LoadState.withMessage becomes LoadState.Failed unless a log
-        // is already open, which would replace the whole screen with the "that
-        // did not load" page over a message about an install.
-        if (!UpdateCheck.canInstall(this)) {
-            updateState = UpdateState.Ready(
-                release,
-                apk,
-                note = "Allow Dive Slate to install apps, then tap Install again",
-            )
-            runCatching { startActivity(UpdateCheck.unknownSourcesSettings(this)) }
-                .onFailure {
-                    updateState = UpdateState.Ready(
-                        release,
-                        apk,
-                        note = "This phone offers no page for allowing installs from " +
-                            "an app, so the APK has to be opened from your files",
-                    )
-                }
-            return
-        }
-        runCatching { startActivity(UpdateCheck.installIntent(this, apk)) }
-            .onFailure { e ->
+    private fun openRelease(release: UpdateCheck.Release) {
+        runCatching { startActivity(UpdateCheck.releaseIntent(release)) }
+            .onFailure {
                 updateState = UpdateState.Failed(
-                    "Android would not open the installer: ${e.message ?: e::class.simpleName}",
+                    "No app here opens web links. The release is at ${release.releaseUrl}",
                 )
             }
     }

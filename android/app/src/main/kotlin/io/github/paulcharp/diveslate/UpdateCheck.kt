@@ -3,24 +3,36 @@ package io.github.paulcharp.diveslate
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.provider.Settings
-import androidx.core.content.FileProvider
 import org.json.JSONObject
-import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
-import java.security.MessageDigest
 
 /**
- * Self-update, because there is no store in this picture.
+ * Update *notice*, because there is no store in this picture.
  *
  * A sideloaded app has nothing telling it that a newer build exists, and an
  * install that can never hear about a fix is a fix nobody gets. So the app asks
- * GitHub directly.
+ * GitHub directly — and then stops, handing the release page to the browser.
  *
- * Deliberately built on the framework alone — `org.json` and HttpURLConnection
- * ship with Android — so the update path adds no dependency to an APK whose
- * whole appeal is being small, and nothing here needs a ProGuard keep rule.
+ * **It deliberately does not download or install the APK, and the app no longer
+ * holds `REQUEST_INSTALL_PACKAGES`.** It did both until 0.4.0, and the cost was
+ * not theoretical: fetching a binary over the network and asking Android to
+ * install it is, as behaviour, indistinguishable from a dropper. Play Protect
+ * scores behaviour rather than intent, and a certificate it has never seen on a
+ * build with a handful of installs has nothing on the other side of the scale,
+ * so a correct release was refused with "Unsafe app blocked". Worse is the
+ * variant the user cannot tap through: Google's enhanced fraud protection
+ * blocks sideloading outright for apps declaring this permission, and a phone
+ * that cannot install is a phone that can never be updated again.
+ *
+ * Handing off costs two taps and moves checksum verification from automatic to
+ * available — the digest is shown so it *can* be checked, where before it was
+ * enforced. That is a real loss, and it buys the thing without which none of the
+ * rest matters: an update that installs.
+ *
+ * Still built on the framework alone — `org.json` and HttpURLConnection ship
+ * with Android — so the update path adds no dependency to an APK whose whole
+ * appeal is being small, and nothing here needs a ProGuard keep rule.
  */
 object UpdateCheck {
 
@@ -39,7 +51,7 @@ object UpdateCheck {
     private const val MANIFEST_URL =
         "https://github.com/paul-charp/Dive-Slate/releases/latest/download/update.json"
 
-    /** Where a downloaded APK is allowed to have come from. */
+    /** Where the manifest is allowed to send the user. */
     private val ALLOWED_HOSTS = setOf(
         "github.com",
         "objects.githubusercontent.com",
@@ -62,10 +74,14 @@ object UpdateCheck {
     private val USER_AGENT = "DiveSlate/${BuildConfig.VERSION_NAME}"
 
     /**
-     * What a release says about itself. Every field is required: a manifest
-     * missing its checksum or its versionCode cannot be acted on safely, and
-     * guessing a default would be exactly the "degrade to a guess" this codebase
-     * avoids in its derived figures.
+     * What a release says about itself. Every field is required: guessing a
+     * default would be exactly the "degrade to a guess" this codebase avoids in
+     * its derived figures.
+     *
+     * [apkSha256] and [apkSize] are still read and still validated even though
+     * nothing here downloads any more. They are what the banner shows, so that
+     * someone who wants to verify a download by hand has the expected digest in
+     * front of them rather than having to go and find it.
      */
     data class Release(
         val versionCode: Int,
@@ -100,13 +116,17 @@ object UpdateCheck {
             releaseUrl = json.getString("releaseUrl"),
         )
 
-        // The manifest is the trust root — it arrived over TLS from GitHub, and
-        // its checksum is what makes the download verifiable. Pinning the host
-        // anyway costs one comparison and means a manifest that somehow said
-        // "fetch the APK from elsewhere" gets refused rather than followed.
-        val host = Uri.parse(release.apkUrl).host
-        require(Uri.parse(release.apkUrl).scheme == "https" && host in ALLOWED_HOSTS) {
-            "release APK is not hosted on GitHub: $host"
+        // Both URLs are pinned, and releaseUrl is now the one that matters: it
+        // is handed to a browser, so a manifest that somehow named another host
+        // would be sending the user somewhere else entirely to fetch something
+        // called an update. The manifest arrived over TLS from GitHub, which is
+        // the trust root; pinning costs one comparison and refuses rather than
+        // follows.
+        for (url in listOf(release.releaseUrl, release.apkUrl)) {
+            val parsed = Uri.parse(url)
+            require(parsed.scheme == "https" && parsed.host in ALLOWED_HOSTS) {
+                "the release manifest points off GitHub: ${parsed.host}"
+            }
         }
         require(release.apkSha256.matches(Regex("[0-9a-f]{64}"))) {
             "release checksum is not a SHA-256 digest"
@@ -118,104 +138,17 @@ object UpdateCheck {
     }
 
     /**
-     * Download the APK and verify it against the manifest's checksum.
+     * Open the release page, and let the browser take it from there.
      *
-     * The checksum is not optional politeness: it is the only thing standing
-     * between a truncated or substituted download and Android being asked to
-     * install it. A mismatch deletes the file and throws.
-     *
-     * An already-downloaded APK that still matches is reused, so backing out of
-     * the installer and trying again does not re-fetch two megabytes.
+     * The whole of the install path now: the browser downloads the APK and the
+     * user opens it, which makes the *browser* the unknown source Android asks
+     * about. That is the ordinary, well-worn route onto a phone, rather than
+     * this app asking for the right to install software — which is the request
+     * that got a correct build classified as harmful.
      */
-    fun download(context: Context, release: Release, onProgress: (Float) -> Unit): File {
-        val dir = File(context.cacheDir, "updates").apply { mkdirs() }
-        // One file, overwritten. The cache is a hand-off buffer, exactly as it
-        // is for exported slates, not somewhere to accumulate every version.
-        val apk = File(dir, "update.apk")
-
-        if (apk.isFile && sha256(apk) == release.apkSha256) {
-            onProgress(1f)
-            return apk
-        }
-
-        val digest = MessageDigest.getInstance("SHA-256")
-        var written = 0L
-        connect(release.apkUrl).let { connection ->
-            try {
-                connection.inputStream.use { input ->
-                    apk.outputStream().use { output ->
-                        val buffer = ByteArray(64 * 1024)
-                        while (true) {
-                            val read = input.read(buffer)
-                            if (read < 0) break
-                            written += read
-                            if (written > APK_LIMIT_BYTES) {
-                                throw IllegalStateException("the download did not stop")
-                            }
-                            output.write(buffer, 0, read)
-                            digest.update(buffer, 0, read)
-                            onProgress((written.toFloat() / release.apkSize).coerceIn(0f, 1f))
-                        }
-                    }
-                }
-            } finally {
-                connection.disconnect()
-            }
-        }
-
-        val actual = digest.digest().toHex()
-        if (actual != release.apkSha256) {
-            apk.delete()
-            throw IllegalStateException(
-                "the download does not match the checksum in the release — " +
-                    "expected ${release.apkSha256.take(12)}…, got ${actual.take(12)}…",
-            )
-        }
-        return apk
-    }
-
-    /**
-     * Whether Android will let this app ask to install one.
-     *
-     * The permission in the manifest only buys the right to ask; the user grants
-     * "install unknown apps" per source, in Settings, and it cannot be requested
-     * with a runtime prompt. False here is a normal first-run state, not an
-     * error — [unknownSourcesSettings] is where the user goes to change it.
-     */
-    fun canInstall(context: Context): Boolean =
-        context.packageManager.canRequestPackageInstalls()
-
-    fun unknownSourcesSettings(context: Context): Intent =
-        Intent(
-            Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-            Uri.parse("package:${context.packageName}"),
-        )
-
-    /**
-     * Hand the APK to Android's installer.
-     *
-     * Through the FileProvider, like everything else that leaves this app: the
-     * installer is another process and a file:// URI would throw
-     * FileUriExposedException before it ever saw the bytes.
-     *
-     * ACTION_VIEW on the package-archive type rather than the PackageInstaller
-     * session API. The session API is the non-deprecated route and reports its
-     * outcome back, but it needs a status receiver and a second confirmation
-     * hop; this is the path every sideloaded updater uses, and the installer
-     * shows its own errors, so a failure is visible where the user is looking.
-     */
-    fun installIntent(context: Context, apk: File): Intent {
-        val uri = FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
-            apk,
-        )
-        return Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, "application/vnd.android.package-archive")
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-    }
+    fun releaseIntent(release: Release): Intent =
+        Intent(Intent.ACTION_VIEW, Uri.parse(release.releaseUrl))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
     /**
      * Whether enough time has passed to look again.
@@ -270,9 +203,10 @@ object UpdateCheck {
             setRequestProperty("User-Agent", USER_AGENT)
             setRequestProperty("Accept", "application/octet-stream")
         }
-        // Release assets live on a different host, so a redirect is the normal
-        // case rather than an edge one. HttpURLConnection follows it as long as
-        // the scheme does not change, and every URL here is https.
+        // The manifest is a release asset, so it redirects to another host: a
+        // redirect is the normal case rather than an edge one. HttpURLConnection
+        // follows it as long as the scheme does not change, and every URL here
+        // is https.
         val code = connection.responseCode
         if (code != HttpURLConnection.HTTP_OK) {
             connection.disconnect()
@@ -286,19 +220,4 @@ object UpdateCheck {
         }
         return connection
     }
-
-    private fun sha256(file: File): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-        file.inputStream().use { input ->
-            val buffer = ByteArray(64 * 1024)
-            while (true) {
-                val read = input.read(buffer)
-                if (read < 0) break
-                digest.update(buffer, 0, read)
-            }
-        }
-        return digest.digest().toHex()
-    }
-
-    private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
 }

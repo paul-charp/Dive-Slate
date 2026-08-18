@@ -92,7 +92,7 @@ android/app/
   MainActivity.kt     share intake, the intent handling described below
   SlatePainter.kt     paints core's display list onto a Canvas
   SlateFiles.kt       MediaStore export, FileProvider
-  UpdateCheck.kt      self-update: manifest, download, checksum, installer
+  UpdateCheck.kt      update notice: manifest fetch, version compare, hand-off
   ui/DiveSlateApp.kt  Compose UI
 
 tools/
@@ -277,8 +277,22 @@ procedure; this is what cost time.
   publish a build without offering it to every installed copy.
 - The updater is **framework-only** — `org.json` and `HttpURLConnection` — so it
   adds no dependency to the APK and needs no R8 keep rule.
-- **`REQUEST_INSTALL_PACKAGES` is Play-restricted.** If this app ever goes to the
-  Play Store, the self-updater goes with it.
+- **The app does not install its own updates any more, and must not start
+  again.** It downloaded the APK, verified it against the manifest checksum and
+  handed it to the package installer until 0.4.0. Downloading a binary and
+  asking to install it is, as *behaviour*, what a dropper does — Play Protect
+  scores behaviour, not intent, and a certificate it has never seen on a build
+  with a handful of installs has nothing on the other side of the scale. A
+  correctly signed release was refused with "Unsafe app blocked". Worse is the
+  variant nobody can tap through: Google's enhanced fraud protection blocks
+  sideloading outright for apps declaring `REQUEST_INSTALL_PACKAGES`, and a
+  phone that cannot install is a phone that can never be updated again.
+  `UpdateCheck` now opens the release page and the browser does the rest, which
+  makes the *browser* the unknown source Android asks about. The cost is real
+  and was accepted deliberately: two more taps, and checksum verification
+  demoted from enforced to displayed. Adding the permission back to recover
+  either would buy back the block. (It was already Play-restricted, so it would
+  have had to go if this ever reached the Play Store.)
 - **`InputStream.readNBytes` is API 33 on Android**, and `minSdk` is 29. It
   compiles without a murmur and throws `NoSuchMethodError` on Android 10–12.
   Framework methods that look like ordinary Java still need their API level

@@ -2,21 +2,22 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!--
-      Both of these exist for the updater, and for nothing else. The app reads
-      local files and draws a picture; without self-update it would need no
-      network at all.
+      One permission, for the update check and nothing else. The app reads local
+      files and draws a picture; without the check it would need no network at
+      all. There is no store in this picture, so an install has no other way to
+      learn that a fix exists — INTERNET buys exactly one request, to github.com,
+      for a few hundred bytes of update manifest.
 
-      There is no store in this picture, so an install has no other way to learn
-      that a fix exists. INTERNET is used for exactly two requests, both to
-      github.com: the update manifest, and the APK the user agreed to fetch.
-
-      REQUEST_INSTALL_PACKAGES only buys the right to *ask* — the user still
-      grants "install unknown apps" for this app in Settings, and Android shows
-      its own installer either way. Note it is a Play-restricted permission: if
-      this app ever goes to the Play Store, the updater goes with it.
+      REQUEST_INSTALL_PACKAGES was here until 0.4.0 and is deliberately gone.
+      Downloading a binary and asking Android to install it is, as behaviour,
+      indistinguishable from a dropper: Play Protect classified a correctly
+      signed release as "Unsafe app blocked", and Google's enhanced fraud
+      protection blocks sideloading outright for apps that declare it — a phone
+      which cannot install is a phone that can never be updated again. The app
+      now opens the release page and lets the browser be the unknown source.
+      Do not add it back to save the user two taps.
     -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!--
       No <queries> block. Sharing goes through the system chooser, which resolves

@@ -82,12 +82,20 @@ installs from wherever you opened the file — a browser or a file manager. Each
 release also carries a `.sha256` beside the APK if you want to check the
 download by hand.
 
-**The app keeps itself up to date.** Once a day it asks GitHub whether a newer
-release exists and offers it to you; the download is verified against the
-checksum published in the release before Android is asked to install anything,
-and a mismatch is refused rather than installed. Those two requests are the only
-thing the app does with the network, and the only reason it asks for internet
-access at all.
+**The app tells you when there is a newer version.** Once a day it asks GitHub
+whether one exists, and if so offers to open the release page — your browser
+downloads it and Android installs it from there. That single request for a few
+hundred bytes of manifest is the only thing the app does with the network, and
+the only reason it asks for internet access at all.
+
+It used to download and install the update itself, and stopped at 0.4.1.
+Fetching a binary and asking to install it is behaviourally what a dropper does,
+so Play Protect classified a correctly signed release as harmful, and Google's
+enhanced fraud protection blocks sideloading altogether for apps holding
+`REQUEST_INSTALL_PACKAGES` — a phone that cannot install is a phone that can
+never be updated again. Handing off to the browser costs two taps and gives up
+verifying the download automatically; the banner prints the expected SHA-256 so
+you can still check it against the `.sha256` on the release.
 
 ## The figures on the slate
 
