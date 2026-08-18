@@ -78,26 +78,43 @@ rather choose.
 same file to the system chooser, which is as useful in a video editor as it is
 in a message.
 
+The app follows **Material You**, so on Android 12+ the accent comes from your
+wallpaper — these screenshots show one phone's, not a fixed colour. The slate
+itself never changes with it: those palettes were admitted by measured contrast
+tests, and a colour picked off a home screen has not been through them.
+
 </td>
 </tr>
 </table>
 
 ## A trip at a time
 
-Hold a dive in the list to start picking, then take as many as you want —
-**Select all**, or **All** on a file's heading to take just that trip. The
-editor previews them one at a time with `‹ ›` while every control applies to
-the whole set, so a trip's slates come out looking like a set rather than like
-twelve separate exports.
+<table>
+<tr>
+<td width="34%"><img src="docs/images/app-select.png" alt="The dive list in selection mode, grouped by file, with three dives picked across two files"></td>
+<td>
 
-Two things the batch is careful not to hide, because a slate that is quietly
-missing or quietly thinner than the one you designed is indistinguishable from
-a log that never recorded the dive:
+Hold a dive to start picking, then take as many as you want — **Select all**, or
+**All** on a file's heading to take just that trip. Open several files at once
+and they stay grouped under the file they came from, so two logbooks never blur
+into one list.
 
-- **A dive with no depth samples cannot be drawn**, so the list refuses it and
-  says why on the row, rather than accepting it and dropping it later.
-- **A figure you picked that other dives never recorded** is counted up front —
+The editor previews the picked dives one at a time with `‹ ›` while every
+control applies to the whole set, so a trip's slates come out matching rather
+than looking like twelve separate exports.
+
+Two things the batch will not hide, because a slate that is quietly missing —
+or quietly thinner than the one you designed — is indistinguishable from a log
+that never recorded the dive:
+
+- **A dive with no depth samples cannot be drawn.** The list refuses it and says
+  so on the row, rather than accepting it and dropping it at export.
+- **A figure you picked that the others never recorded** is counted up front —
   *"GF is missing on 3 of 6"* — because you chose it while looking at one dive.
+
+</td>
+</tr>
+</table>
 
 Each slate lands as its own PNG, named for the export time, the dive number and
 the site. Sharing a batch works too, though most apps will only accept an image
