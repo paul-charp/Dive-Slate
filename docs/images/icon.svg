@@ -1,0 +1,11 @@
+<!-- The launcher icon, as SVG for this page. Same paths and colours as
+     app/src/main/res/drawable/ic_launcher_*.xml — a descent, a bottom leg,
+     then a stepped ascent through deco stops. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 108 108">
+  <rect width="108" height="108" rx="24" fill="#0B1013"/>
+  <path d="M30,36 L44,68 L58,68 L64,56 L72,56 L76,46 L82,46 L82,36 Z"
+        fill="#3987E5" fill-opacity="0.22"/>
+  <path d="M30,36 L44,68 L58,68 L64,56 L72,56 L76,46 L82,46"
+        fill="none" stroke="#3987E5" stroke-width="5"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

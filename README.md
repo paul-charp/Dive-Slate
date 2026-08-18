@@ -1,56 +1,130 @@
+<div align="center">
+
+<img src="docs/images/icon.svg" width="88" alt="">
+
 # Dive Slate
+
+**Your dive profile, as a transparent badge you can drop on a photo.**
 
 [![CI](https://github.com/paul-charp/Dive-Slate/actions/workflows/ci.yml/badge.svg)](https://github.com/paul-charp/Dive-Slate/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/paul-charp/Dive-Slate)](https://github.com/paul-charp/Dive-Slate/releases/latest)
+[![Android 10+](https://img.shields.io/badge/Android-10%2B-3987E5)](#get-it)
+[![License: MIT](https://img.shields.io/badge/License-MIT-informational)](LICENSE)
 
-An Android app that turns a dive log into a **transparent slate** — a compact
-badge of your profile to drop over a photo or video.
+[**Download the APK**](https://github.com/paul-charp/Dive-Slate/releases/latest) · [Layouts](#four-layouts) · [Figures](#the-figures) · [Themes](#nine-themes)
 
-![The exported slate](docs/images/slate.png)
+</div>
 
-*The actual export: a transparent PNG, 3240×1404, no background. What you see
-behind the corners is this page.*
+<img src="docs/images/in-use.jpg" width="380" align="right" alt="A Dive Slate badge over a photo of divers on a deco stop">
 
-Share a dive out of Subsurface-mobile, pick a palette, and save it to your
-gallery or send it wherever you want it. About three taps end to end.
+Share a dive out of Subsurface-mobile, pick a look, save it to your gallery.
+About three taps end to end.
 
-## The app
+What comes out is a **transparent PNG** — a profile silhouette, the site name and
+a few big numbers, with no background behind them. Drop it on a stop photo, a
+video frame or a story and the shot still shows through.
 
-| Wide | Tall |
-|---|---|
-| ![Wide layout](docs/images/app-wide.png) | ![Tall layout](docs/images/app-tall.png) |
+- 🤿 **Reads your real log.** Subsurface (`.ssrf`) or UDDF (`.uddf`), shared
+  straight in from Subsurface-mobile or picked out of your files.
+- 🖼️ **Four layouts.** Full-frame strips, or corner badges small enough to stay
+  out of the way of the shot.
+- 🎨 **Nine palettes**, each machine-checked for colour-blind separation and
+  contrast — not eyeballed.
+- 📐 **Nothing invented.** A figure your log cannot answer is left off rather
+  than guessed at.
+- 📶 **Works offline.** The only thing it ever asks the network is whether a
+  newer release exists.
 
-The preview sits on a checkerboard because the output has no background — that
-is the product, and a solid backdrop would hide the one property that matters.
+<br clear="right">
 
-Takes a **Subsurface** (`.ssrf`) or **UDDF** (`.uddf`) log — shared in from
-Subsurface-mobile, picked out of your files, or the bundled sample — lists the
-dives newest first, then previews the chosen one and exports it. A single-dive
-log skips the list.
+## What you get
 
-The slate itself is a profile silhouette, the site name, and a few big numbers.
-No axes and no legend: at a third of frame width on a phone those are unreadable
-noise rather than information.
+<table>
+<tr>
+<td width="50%"><img src="docs/images/slate.png" alt="The exported slate on a checkerboard"></td>
+<td>
 
-Wide and Tall span the frame and lead with the profile. The other two are corner
-badges, for footage that is doing its own talking: **Compact** (460 × 388) puts
-depth and runtime first, side by side, with the profile cut to a strip beneath
-them, and **Watch** (400 × 459) is smaller and square-ish, stacking the two
-figures so each gets the full width — which is how a badge a third of the frame
-carries numerals larger than the layout spanning all of it.
+**The export.** A transparent PNG at 3× — 3240 × 1404 for the Wide layout shown
+here. No background is ever painted, so what you can see through the corners is
+this page.
 
-Each layout states how many figures it has room for: four for Wide and Tall, two
-for the badges, since their columns split a much narrower slate. The picker shows
-the budget and greys out the rest rather than dropping the overflow when it
-draws.
+That is the whole product, and it is why the preview in the app sits on a
+checkerboard rather than on something prettier. A solid backdrop would hide the
+one property that matters.
 
-The look is chosen along three axes, broadest first:
+</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td width="28%"><img src="docs/images/app-wide.png" alt="The app: preview, style and layout"></td>
+<td width="28%"><img src="docs/images/app-controls.png" alt="The app: elements, figures and export"></td>
+<td>
+
+**The app.** Open a log and it lists the dives newest first — a single-dive log
+skips straight past that. Pick one and you get the preview, the three look
+controls, the elements and figures pickers, and an opacity slider.
+
+Figures are **automatic** by default: the app fills the layout's budget with
+whatever your log can answer, best first. Pick your own whenever you would
+rather choose.
+
+**Save to gallery** writes the PNG to Pictures › Dive Slate. **Share** hands the
+same file to the system chooser, which is as useful in a video editor as it is
+in a message.
+
+</td>
+</tr>
+</table>
+
+## Four layouts
+
+Pick how much of the frame the slate is allowed to take. All four previews below
+are the same frame at the same scale, which is how the app shows them too — so a
+corner badge looks like a corner badge before you export it.
+
+<table>
+<tr>
+<td width="50%" align="center"><img src="docs/images/layout-wide.png" alt="Wide layout preview"><br><strong>Wide</strong> · across the bottom of a 16:9 frame</td>
+<td width="50%" align="center"><img src="docs/images/layout-tall.png" alt="Tall layout preview"><br><strong>Tall</strong> · for a 9:16 story</td>
+</tr>
+<tr>
+<td align="center"><img src="docs/images/layout-compact.png" alt="Compact layout preview"><br><strong>Compact</strong> · a corner badge</td>
+<td align="center"><img src="docs/images/layout-watch.png" alt="Watch layout preview"><br><strong>Watch</strong> · the smallest, figures stacked</td>
+</tr>
+</table>
+
+Every layout works with every style and every palette.
+
+| | Size | Figures | Made for |
+|---|---|---|---|
+| **Wide** | 1080 × 468 → exports **3240 × 1404** | up to 4 | Across the bottom of a 16:9 frame. The profile leads and the numbers caption it. |
+| **Tall** | 1080 × 776 → exports **3240 × 2328** | up to 4 | A 9:16 story. The same arrangement, but the profile gets roughly twice the height and the numerals are half again as large. |
+| **Compact** | 460 × 362 → exports **1380 × 1086** | 2 | A corner of footage that is doing its own talking. Depth and runtime come first, side by side, with the profile cut to a strip beneath them. |
+| **Watch** | 400 × 434 → exports **1200 × 1302** | 2 | The smallest, and roughly square. The two figures stack, so each gets the full width — which is how a badge a third of the frame wide carries **larger numerals than the layout spanning all of it**. |
+
+Sizes are what the reference dive renders to; height follows the content, so a
+log with no gas switches sits a little shorter. The corner badges are narrower
+than the frame on purpose — narrowing a layout tightens the badge rather than
+shrinking what is printed on it.
+
+**Each layout says how many figures it has room for**, and the picker shows the
+budget and greys out the rest. Four across Wide and Tall; two on the badges,
+whose columns split a much narrower slate — a third column on Compact would be
+130px wide, which is not enough for `Air, O2` at a size worth reading. The
+trimming happens in front of you rather than at export, because a slate quietly
+missing a figure looks exactly like a log that never recorded one.
+
+## Style, layout, theme
+
+Three independent controls, broadest first:
 
 | | what it decides | choices |
 |---|---|---|
 | **Style** | how the slate is drawn — the art direction | `modern` |
 | **Layout** | how it is proportioned — where things go, how big | Wide, Tall, Compact, Watch |
-| **Theme** | what colour it is | nine palettes, see [Themes](#themes) |
+| **Theme** | what colour it is | nine palettes |
 
 They compose: every layout works with every style. A style carries its own
 palettes, because a palette is validated against the marks it will be painted
@@ -59,23 +133,107 @@ as — so picking a style is what decides which themes are on offer.
 Also adjustable: which elements appear, which figures are shown, and the scrim
 panel's opacity.
 
-**The opacity control moves the panel and nothing else.** Ink is never faded, and
-the slider is clamped to a per-theme floor computed from ink contrast against the
-worst possible backdrop. Fading the marks would void the contrast the palette
-gates enforce and turn the deliberately-unthemed hazard red into a pink
-suggestion.
+<details>
+<summary><strong>Why the opacity slider only moves the panel</strong></summary>
 
-**Save to gallery** writes the transparent PNG to Pictures › Dive Slate,
-confirmed with a snackbar because a MediaStore write is otherwise silent and
-lands in an album you are not looking at. **Share** hands the same file to the
-system chooser — a transparent PNG is as useful in a video editor or a message
-as it is in a story.
+<br>
 
-## Install
+The slider moves the scrim panel and nothing else, and it is clamped to a
+per-theme floor computed from ink contrast against the worst possible backdrop.
 
-Download the APK from the
-[latest release](https://github.com/paul-charp/Dive-Slate/releases/latest) and
-open it. Android 10 or newer.
+Fading the marks themselves would void the contrast the palette gates enforce
+and turn the deliberately-unthemed hazard red into a pink suggestion. Two tests
+hold that line.
+
+</details>
+
+## The figures
+
+Left on **Auto**, the slate always shows max depth and runtime, then fills the
+rest of the layout's budget with whichever of these your log can answer. Pick
+them yourself instead whenever you would rather choose:
+
+| key | shows | needs |
+|---|---|---|
+| `depth` | max depth, rounded up to the metre | samples |
+| `time` | runtime, rounded up to the minute | samples |
+| `deco` | time spent decompressing | a recorded ceiling |
+| `gf` | gradient factors, e.g. `70/80` | a deco-model label containing them |
+| `used` | gas consumed, litres | cylinder size + start and end pressure |
+| `avg` | average depth | samples or the logged mean |
+| `temp` | minimum water temperature | temperature samples |
+| `sac` | surface air consumption | the log's own SAC field |
+| `cns` | CNS toxicity percentage | the log's own CNS field |
+| `gas` | mixes breathed, e.g. `Air, O2` | gas-switch events |
+
+A value the log cannot supply is skipped rather than shown blank. A value too
+wide for its column — a long list of mixes, mostly — is set smaller so it stays
+inside it, rather than being dropped or left to run into its neighbour.
+
+Slate figures round **up**: 44.4 m is a 45 m dive.
+
+<details>
+<summary><strong>Two of these are derived, not read</strong></summary>
+
+<br>
+
+**Deco time** is not a field in any log. It is computed as *from first reaching
+the ceiling on the way up, until the obligation clears* — the hang. This is
+deliberately not the same as the span during which deco was owed, which begins
+the moment the ceiling leaves the surface, usually while you are still on the
+bottom. On the reference dive those are 23 minutes and 50 minutes respectively,
+and reporting the latter as "deco" would claim fifty minutes of stops that never
+happened.
+
+A dive that clears deco and re-incurs it served **two** hangs, and they are
+summed — the cleared interval between them is never counted.
+
+**Gradient factors** are recovered by pattern from a free-text deco-model label
+(`GF 70/80`, `ZHL16C GF30/85`, `Buhlmann ZH-L16C + GF 30/85`). Anything that is
+not a valid pair of percentages yields nothing rather than a guess — a VPM-B dive
+has no gradient factors and must not appear to.
+
+</details>
+
+## Nine themes
+
+Generated and machine-checked rather than chosen, and grouped by the footage
+they are for:
+
+| for dark footage | for pale backgrounds |
+|---|---|
+| `slate` `reef` `lagoon` `abyss` `twilight` `orchid` | `light` `paper` `ink` |
+
+Each is derived from one base hue: that becomes the depth curve, and the
+gas-switch accent is then found by searching the hue circle for the colour that
+separates best from both the curve and the deco-ceiling red. Every palette is
+validated for colour-vision-deficiency separation, chroma, lightness and
+contrast before it ships — arithmetic that runs at design time, so the app ships
+only the answers.
+
+The ceiling red is deliberately **not** themed. A hazard colour that shifts with
+the palette stops reading as a hazard.
+
+<details>
+<summary><strong>Why there are no warm or green palettes</strong></summary>
+
+<br>
+
+Only hues from roughly **180° to 330°** work — cyan through blue, violet and
+magenta. Warm and green bases collide with the fixed red ceiling: a green curve
+looks maximally different from red to normal vision (ΔE 24) but measures **2.2**
+under protanopia, which is no separation at all.
+
+The sRGB gamut is also not a cylinder, so asking for a fixed chroma across hues
+silently desaturates cyan below the floor. The generator sweeps for the
+lightness at which each hue holds the most chroma instead.
+
+</details>
+
+## Get it
+
+**[Download the latest APK](https://github.com/paul-charp/Dive-Slate/releases/latest)**
+and open it. Android 10 or newer.
 
 It is not on the Play Store, so your phone will ask once whether to allow
 installs from wherever you opened the file — a browser or a file manager. Each
@@ -89,79 +247,32 @@ and a mismatch is refused rather than installed. Those two requests are the only
 thing the app does with the network, and the only reason it asks for internet
 access at all.
 
-**Your phone may call this app unsafe, and here is why.** To install its own
-updates it holds `REQUEST_INSTALL_PACKAGES`, and an app that downloads a binary
-and asks to install it looks — as behaviour — exactly like malware that does the
-same thing. Play Protect scores behaviour, not intent, so a correctly signed
-release can be met with "Unsafe app blocked". **More details → Install anyway**
-gets past it, and the `.sha256` on each release lets you confirm you have the
-file this repository built. If your phone blocks the install outright with no way
-through, that is Google's enhanced fraud protection, which cannot be overridden —
-download the APK from the release page in a browser instead.
+<details>
+<summary><strong>Your phone may call this app unsafe, and here is why</strong></summary>
 
-## The figures on the slate
+<br>
 
-Two are always shown — max depth and runtime — then whichever of these the log
-can answer, up to the limit you set and the number the layout has room for
-(four across Wide and Tall, two on the corner badges):
+To install its own updates the app holds `REQUEST_INSTALL_PACKAGES`, and an app
+that downloads a binary and asks to install it looks — as behaviour — exactly
+like malware that does the same thing. Play Protect scores behaviour, not
+intent, so a correctly signed release can be met with "Unsafe app blocked".
 
-| key | shows | needs |
-|---|---|---|
-| `depth` | max depth, rounded up to the metre | samples |
-| `time` | runtime, rounded up to the minute | samples |
-| `deco` | time spent decompressing | a recorded ceiling |
-| `gf` | gradient factors, e.g. `70/80` | a deco-model label containing them |
-| `used` | gas consumed, litres | cylinder size + start and end pressure |
-| `temp` | minimum water temperature | temperature samples |
-| `sac` | surface air consumption | the log's own SAC field |
-| `cns` | CNS toxicity percentage | the log's own CNS field |
-| `avg` | average depth | samples or the logged mean |
-| `gas` | mixes breathed, e.g. `Air, O2` | gas-switch events |
+**More details → Install anyway** gets past that, and the `.sha256` on each
+release lets you confirm you have the file this repository built.
 
-A value the log cannot supply is skipped rather than shown blank. A value too
-wide for its column — a long list of mixes, mostly — is set smaller so it stays
-inside it, rather than being dropped or left to run into its neighbour.
+If your phone blocks the install outright with no way through, that is Google's
+enhanced fraud protection, which cannot be overridden — download the APK from
+the release page in a browser instead.
 
-### Two of these are derived, not read
+</details>
 
-**Deco time** is not a field in any log. It is computed as *from first reaching
-the ceiling on the way up, until the obligation clears* — the hang. This is
-deliberately not the same as the span during which deco was owed, which begins
-the moment the ceiling leaves the surface, usually while you are still on the
-bottom. On the reference dive those are 23 minutes and 50 minutes respectively,
-and reporting the latter as "deco" would claim fifty minutes of stops that never
-happened.
+### Getting a dive in
 
-**Gradient factors** are recovered by pattern from a free-text deco-model label
-(`GF 70/80`, `ZHL16C GF30/85`, `Buhlmann ZH-L16C + GF 30/85`). Anything that is
-not a valid pair of percentages yields nothing rather than a guess — a VPM-B dive
-has no gradient factors and must not appear to.
-
-## Themes
-
-Nine, generated and machine-checked rather than chosen. They belong to the
-`modern` style, which is the one that paints the marks they were validated
-against:
-
-| for dark footage | for pale backgrounds |
+| from | how |
 |---|---|
-| `slate` `reef` `lagoon` `abyss` `twilight` `orchid` | `light` `paper` `ink` |
-
-Each is derived from one base hue: that becomes the depth curve, and the
-gas-switch accent is then found by searching the hue circle for the colour that
-separates best from both the curve and the deco-ceiling red. Every palette is
-validated for colour-vision-deficiency separation, chroma, lightness and contrast
-before it ships.
-
-That validation is arithmetic, and it runs **at design time, not on the phone**.
-The app ships the answers as constants.
-
-Only hues from roughly **180° to 330°** work — cyan through blue, violet and
-magenta. Warm and green bases collide with the fixed red ceiling: a green curve
-looks maximally different from red to normal vision (ΔE 24) but measures 2.2
-under protanopia.
-
-## Formats
+| **Subsurface-mobile** | Export the dive and pick Dive Slate in the share sheet |
+| **A file on the phone** | Open it from the app, wherever it lives |
+| **Neither** | The bundled sample dive, to see what the app does |
 
 | Format | Extensions | Notes |
 | --- | --- | --- |
@@ -169,6 +280,19 @@ under protanopia.
 | UDDF 3.x | `.uddf`, `.xml` | SI units, namespace-agnostic; mandatory deco stops only |
 
 Detection reads file content, not the extension, so a renamed log still works.
+Subsurface's own database cannot be read directly — Android denies it to other
+apps — so the export is the only route in, not a workaround.
+
+## Known gaps
+
+- Settings do not persist across launches: style, layout, palette, opacity and
+  figure choices reset every time.
+- No background-media picker, so the palette cannot yet be judged against your
+  own footage — only against the checkerboard.
+- No library. Every incoming log is already copied to `filesDir/logs/`, and
+  nothing ever reads that directory back, so re-rendering an old dive means
+  exporting it from Subsurface again. Surfacing what is already being saved is
+  the cheapest real improvement left.
 
 ## Build
 
@@ -198,7 +322,10 @@ publishes. [docs/RELEASING.md](docs/RELEASING.md) covers the keystore, the
 repository secrets, and what each of the pipeline's refusals is protecting
 against.
 
-## Repository layout
+<details>
+<summary><strong>Repository layout, and how the rendering is split</strong></summary>
+
+<br>
 
 ```
 android/       the app. core/ is plain Kotlin/JVM — units, models, both
@@ -216,7 +343,7 @@ tools/         Python, design-time only. The palette maths and the scripts
                the release manifest and the app still agree about its fields.
                Nothing here ships.
 
-docs/          RELEASING.md, and the screenshots this page uses.
+docs/          RELEASING.md, and the images this page uses.
 
 .github/       CI on every push; a signed release on every v* tag.
 ```
@@ -230,7 +357,12 @@ prove a palette clears the gates, and having proved it for the nine presets, its
 job is done. Porting it would mean shipping a colour-science library on a phone
 to recompute a constant.
 
-## Development
+</details>
+
+<details>
+<summary><strong>Development notes</strong></summary>
+
+<br>
 
 `core:test` reads `conformance/`, so a fixture change invalidates the task rather
 than reporting up to date — if a green run ever looks too good, `--rerun-tasks`
@@ -251,16 +383,7 @@ how a share intent actually arrives, and the reasoning behind decisions that
 look arbitrary from the outside. Read it before changing parsing, palettes or
 the intent filters.
 
-## Known gaps
-
-- Settings do not persist across launches: style, layout, palette, opacity and
-  figure choices reset every time.
-- No background-media picker, so the palette cannot yet be judged against your
-  own footage — only against the checkerboard.
-- No library. Every incoming log is already copied to `filesDir/logs/` with a
-  timestamp, and nothing ever reads that directory back — so re-rendering an
-  old dive means exporting it from Subsurface again. Surfacing what is already
-  being saved is the cheapest real improvement left.
+</details>
 
 ## License
 
