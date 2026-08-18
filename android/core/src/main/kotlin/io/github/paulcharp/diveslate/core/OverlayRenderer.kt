@@ -53,7 +53,16 @@ data class OverlayOptions(
     val showDeco: Boolean = true,
     /** Which summary values to show, in order. `null` picks automatically. */
     val stats: List<String>? = null,
-    val maxStats: Int = 3,
+    /**
+     * A ceiling on the number of figures, over and above the layout's own.
+     *
+     * Unlimited by default, because the layout is the authority — see
+     * [SlateLayout.maxFigures], which knows how many columns it has room for.
+     * This is only here for a caller that wants fewer than the layout allows.
+     * It used to default to three, which quietly held every layout to three no
+     * matter what its own geometry could carry.
+     */
+    val maxStats: Int = Int.MAX_VALUE,
     val cornerRadius: Float = 30f,
     /**
      * Scrim opacity, or `null` to use the theme's own.
@@ -138,10 +147,20 @@ val STAT_KEYS: List<String> = STAT_BUILDERS.keys.toList()
  * Shared across styles on purpose: which numbers are worth printing is a fact
  * about the dive log, not about the art direction. How they are typeset is the
  * style's business.
+ *
+ * The layout's budget binds a hand-picked list as firmly as an automatic one.
+ * It has to: the columns are the layout's geometry, and a list that overruns
+ * them would be typeset too small to read rather than refused. The excess is
+ * taken off the end, so what survives is the front of the order the caller
+ * asked for — but the UI is expected to enforce the budget in the picker, where
+ * the user can see it, rather than leave it to be discovered here.
  */
-internal fun resolveStats(dive: Dive, options: OverlayOptions): List<SlateStat> =
-    options.stats?.let { namedStats(dive, it) }
-        ?: autoStats(dive, options.maxStats, allowDeco = options.showDeco)
+internal fun resolveStats(dive: Dive, options: OverlayOptions): List<SlateStat> {
+    val budget = minOf(options.maxStats, options.layout.maxFigures)
+    val chosen = options.stats?.let { namedStats(dive, it) }
+        ?: autoStats(dive, budget, allowDeco = options.showDeco)
+    return chosen.take(budget)
+}
 
 /**
  * Most headline-worthy first.

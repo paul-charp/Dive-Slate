@@ -117,8 +117,30 @@ The look is chosen along three independent controls, and they are separated
 because they answer different questions:
 
 * **Layout** — where things go and how big they are. `SlateLayout` is a row of
-  proportions quoted at 1080px, and `metrics(width)` scales them. It contains no
-  drawing.
+  proportions quoted at 1080px, and `metrics(canvasWidth)` scales them. It
+  contains no drawing. Two of those proportions are placements rather than
+  sizes: `naturalWidth`, since a corner badge is narrower than the frame it sits
+  in and the canvas is a bound rather than a target; `figuresLead`, since which
+  of the profile and the figures is read first is the same marks in a different
+  order; and `figuresStacked`, since giving each figure a row instead of a
+  column is what lets the 400px `WATCH` badge set larger numerals than the
+  1080px `WIDE` one — the mechanism behind a small slate being readable at all,
+  and held by a test that fails if the numerals stop growing.
+
+  `maxFigures` is the one thing a layout may say about *content*, and it is
+  narrow on purpose. The figures share the width, so a corner badge asked for
+  three types each one smaller than it can carry — the constraint is real and
+  only the resolution is in question. The budgets were set by rendering, not by
+  arithmetic: four for the full-width pair (Tall binds first, since its 86px
+  numerals run out of column before Wide's 56px ones do) and two for the badges.
+  `OverlayOptions.maxStats` is a further ceiling for a caller who wants fewer;
+  it must stay unlimited by default, because a default of three once held every
+  layout to three regardless of what its geometry could carry. It is resolved in
+  the picker, which states the budget and greys out what is left, so a slate
+  carrying fewer figures is something the user watched happen. Resolving it at
+  render time instead is the thing worth refusing: a figure silently missing
+  looks exactly like a log that never recorded it, which is the same reasoning
+  as derived figures degrading to nothing rather than to a guess.
 * **Style** — how the marks are drawn. The art direction. `ModernStyle` is the
   only one so far, and it is the whole of the current renderer.
 * **Theme** — what colour it is. A palette that cleared the gates in

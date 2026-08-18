@@ -62,7 +62,11 @@ object ModernStyle : SlateStyle {
             headingBlock += m.gap
         }
 
-        val statsBlock = m.valueSize + m.labelSize + m.px(10f)
+        // One figure's worth of vertical room, and then however many rows of it
+        // this layout asks for.
+        val figureBlock = m.valueSize + m.labelSize + m.px(10f)
+        val rows = if (m.figuresStacked) max(stats.size, 1) else 1
+        val statsBlock = figureBlock * rows + m.gap * (rows - 1)
         val height = m.pad + headingBlock + m.curveHeight + m.gap + statsBlock + m.pad
 
         val ops = mutableListOf<SlateOp>()
@@ -81,13 +85,21 @@ object ModernStyle : SlateStyle {
         }
 
         // ---- heading -------------------------------------------------------
+        val inner = m.width - m.pad * 2
         var y = m.pad
         if (showSite) {
             y += m.siteSize * 0.78f
+            val site = dive.site!!.uppercase()
             ops.add(
                 SlateOp.Text(
-                    text = dive.site!!.uppercase(),
-                    x = m.pad, baselineY = y, sizePx = m.siteSize,
+                    text = site,
+                    x = m.pad, baselineY = y,
+                    // Fitted for the same reason the figures are: a badge 400px
+                    // wide holds about fourteen characters at full size, and real
+                    // site names run to `SS Thistlegorm, Sha'ab Ali`. The heading
+                    // keeps its nominal height either way, so a long name shrinks
+                    // without moving everything under it.
+                    sizePx = fittedTextSize(site, m.siteSize, inner),
                     fillArgb = theme.ink, haloArgb = theme.halo, haloWidth = m.px(5f),
                     bold = true, letterSpacingEm = 0.02f,
                 )
@@ -104,12 +116,16 @@ object ModernStyle : SlateStyle {
                 )
             )
         }
-        if (hasHeading) y = m.pad + headingBlock
+        // Where the two body blocks land. The layout decides which is read
+        // first; the marks are the same either way, so this is placement rather
+        // than a second art direction, and the overall height does not move.
+        val bodyTop = m.pad + headingBlock
+        val plotTop = if (m.figuresLead) bodyTop + statsBlock + m.gap else bodyTop
+        val statsTop = if (m.figuresLead) bodyTop else bodyTop + m.curveHeight + m.gap
 
         // ---- profile -------------------------------------------------------
         val plotLeft = m.pad
         val plotRight = m.width - m.pad
-        val plotTop = y
         val plotWidth = plotRight - plotLeft
 
         val duration = max(dive.computedDurationSeconds, 1.0)
@@ -160,40 +176,55 @@ object ModernStyle : SlateStyle {
         }
 
         // ---- stats ---------------------------------------------------------
-        val statsY = plotTop + m.curveHeight + m.gap + m.valueSize * 0.8f
-        val slot = (m.width - m.pad * 2) / max(stats.size, 1)
-        for ((index, stat) in stats.withIndex()) {
-            val left = m.pad + index * slot
-            ops.add(
+        // Two arrangements, one set of marks. Stacking hands each figure the
+        // whole width instead of a share of it, which is what lets a badge a
+        // third the size carry larger numerals than the full-width layouts do.
+        fun figureOps(stat: SlateStat, left: Float, top: Float, available: Float): List<SlateOp> {
+            val figure = mutableListOf<SlateOp>()
+            val valueSize = fittedValueSize(stat, m, available)
+            // Baselines come off the layout's nominal size rather than the fitted
+            // one, so a shrunk figure still sits on the line its neighbours do.
+            val baseline = top + m.valueSize * 0.8f
+            figure.add(
                 SlateOp.Text(
-                    text = stat.value, x = left, baselineY = statsY, sizePx = m.valueSize,
+                    text = stat.value, x = left, baselineY = baseline, sizePx = valueSize,
                     fillArgb = theme.ink, haloArgb = theme.halo, haloWidth = m.px(6f),
                     bold = true,
                 )
             )
             if (stat.unit.isNotEmpty()) {
-                // Advance estimated from character count, as the Python does.
-                // The SVG writer could not measure text at all; a real
-                // measurement pass belongs here later, and would only tighten
-                // this.
-                ops.add(
+                figure.add(
                     SlateOp.Text(
                         text = stat.unit,
-                        x = left + stat.value.length * m.valueSize * 0.56f + m.px(8f),
-                        baselineY = statsY, sizePx = m.labelSize * 1.35f,
+                        x = left + valueAdvance(stat.value, valueSize) + m.px(8f),
+                        baselineY = baseline, sizePx = unitSize(m),
                         fillArgb = theme.inkSecondary, haloArgb = theme.halo,
                         haloWidth = m.px(4f),
                     )
                 )
             }
-            ops.add(
+            figure.add(
                 SlateOp.Text(
                     text = stat.label.uppercase(),
-                    x = left, baselineY = statsY + m.labelSize + m.px(8f), sizePx = m.labelSize,
+                    x = left, baselineY = baseline + m.labelSize + m.px(8f), sizePx = m.labelSize,
                     fillArgb = theme.inkMuted, haloArgb = theme.halo, haloWidth = m.px(4f),
                     bold = true, letterSpacingEm = 0.10f,
                 )
             )
+            return figure
+        }
+
+        if (m.figuresStacked) {
+            for ((index, stat) in stats.withIndex()) {
+                ops.addAll(
+                    figureOps(stat, m.pad, statsTop + index * (figureBlock + m.gap), inner)
+                )
+            }
+        } else {
+            val slot = inner / max(stats.size, 1)
+            for ((index, stat) in stats.withIndex()) {
+                ops.addAll(figureOps(stat, m.pad + index * slot, statsTop, slot))
+            }
         }
 
         return Slate(width = m.width, height = height, ops = ops)
@@ -201,6 +232,54 @@ object ModernStyle : SlateStyle {
 }
 
 private val DATE_LABEL = DateTimeFormatter.ofPattern("dd MMM yyyy", Locale.ENGLISH)
+
+/**
+ * Text advance estimated from character count, as the retired Python did.
+ *
+ * The SVG writer it came from could not measure text at all. Core has no font
+ * either — it emits a display list and the app paints it — so the estimate is
+ * still the only measure available here. It is deliberately generous: the cost
+ * of overestimating is a little air in a column, and the cost of
+ * underestimating is two figures touching.
+ */
+private const val ADVANCE = 0.56f
+
+private fun valueAdvance(text: String, sizePx: Float): Float = text.length * sizePx * ADVANCE
+
+/** The largest size at or below [nominal] that keeps [text] within [available]. */
+private fun fittedTextSize(text: String, nominal: Float, available: Float): Float {
+    if (text.isEmpty() || available <= 0f) return nominal
+    return minOf(nominal, available / (text.length * ADVANCE))
+}
+
+private fun unitSize(m: LayoutMetrics): Float = m.labelSize * 1.35f
+
+/**
+ * The figure size that keeps a value and its unit inside one column.
+ *
+ * A narrow layout divides a narrower slate into the same number of columns, so
+ * a value that is a word rather than a number — `Air, O2`, or SAC with its
+ * `L/min` — no longer fits the slot at full size. Shrinking that one figure is
+ * the right failure: the alternatives are dropping it, which would make the
+ * layout control silently change *what* the slate says, or letting it run into
+ * the next column, where two figures overlap and neither can be read.
+ *
+ * Only a figure that would overrun is touched, so a slate whose figures fit —
+ * which, given the layouts' budgets, is nearly all of them — typesets exactly
+ * as it did before this existed.
+ *
+ * There is no floor under the shrinking, and that was a correction rather than
+ * an oversight: a floor sounds prudent, but it hands back a figure that still
+ * does not fit, and an overlap costs *both* columns where a small figure costs
+ * one. It only ever bites the gas list, the single figure whose value is a
+ * sentence rather than a number — and a small list of mixes is still a list of
+ * mixes, while two figures printed through each other are neither.
+ */
+private fun fittedValueSize(stat: SlateStat, m: LayoutMetrics, slot: Float): Float {
+    val unit = if (stat.unit.isEmpty()) 0f else m.px(8f) + valueAdvance(stat.unit, unitSize(m))
+    // A gutter, so columns are separated rather than merely not overlapping.
+    return fittedTextSize(stat.value, m.valueSize, slot - m.px(14f) - unit)
+}
 
 /** Stepped deco ceiling, hatched — the same reading as the full chart's. */
 private fun ceilingOps(

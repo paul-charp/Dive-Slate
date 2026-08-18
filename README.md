@@ -32,12 +32,24 @@ The slate itself is a profile silhouette, the site name, and a few big numbers.
 No axes and no legend: at a third of frame width on a phone those are unreadable
 noise rather than information.
 
+Wide and Tall span the frame and lead with the profile. The other two are corner
+badges, for footage that is doing its own talking: **Compact** (460 × 388) puts
+depth and runtime first, side by side, with the profile cut to a strip beneath
+them, and **Watch** (400 × 459) is smaller and square-ish, stacking the two
+figures so each gets the full width — which is how a badge a third of the frame
+carries numerals larger than the layout spanning all of it.
+
+Each layout states how many figures it has room for: four for Wide and Tall, two
+for the badges, since their columns split a much narrower slate. The picker shows
+the budget and greys out the rest rather than dropping the overflow when it
+draws.
+
 The look is chosen along three axes, broadest first:
 
 | | what it decides | choices |
 |---|---|---|
 | **Style** | how the slate is drawn — the art direction | `modern` |
-| **Layout** | how it is proportioned — where things go, how big | Wide, Tall |
+| **Layout** | how it is proportioned — where things go, how big | Wide, Tall, Compact, Watch |
 | **Theme** | what colour it is | nine palettes, see [Themes](#themes) |
 
 They compose: every layout works with every style. A style carries its own
@@ -80,7 +92,8 @@ access at all.
 ## The figures on the slate
 
 Two are always shown — max depth and runtime — then whichever of these the log
-can answer, up to the limit you set:
+can answer, up to the limit you set and the number the layout has room for
+(four across Wide and Tall, two on the corner badges):
 
 | key | shows | needs |
 |---|---|---|
@@ -95,7 +108,9 @@ can answer, up to the limit you set:
 | `avg` | average depth | samples or the logged mean |
 | `gas` | mixes breathed, e.g. `Air, O2` | gas-switch events |
 
-A value the log cannot supply is skipped rather than shown blank.
+A value the log cannot supply is skipped rather than shown blank. A value too
+wide for its column — a long list of mixes, mostly — is set smaller so it stays
+inside it, rather than being dropped or left to run into its neighbour.
 
 ### Two of these are derived, not read
 

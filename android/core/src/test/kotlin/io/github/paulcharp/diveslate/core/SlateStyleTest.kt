@@ -59,9 +59,9 @@ class SlateStyleTest {
                     "style ${style.id} has no height in the ${layout.id} layout",
                 )
                 assertEquals(
-                    SlateLayout.REFERENCE_WIDTH,
+                    layout.metrics(SlateLayout.REFERENCE_WIDTH).width,
                     slate.width,
-                    "style ${style.id} ignored the requested width in ${layout.id}",
+                    "style ${style.id} ignored the layout's width in ${layout.id}",
                 )
             }
         }
@@ -219,19 +219,221 @@ class SlateStyleTest {
         }
     }
 
+    private fun labels(layout: SlateLayout, stats: List<String>? = null) =
+        renderOverlay(dive, OverlayOptions(layout = layout, stats = stats))
+            .ops.filterIsInstance<SlateOp.Text>().map { it.text }
+
     /**
-     * Layout changes proportions without changing content.
+     * Layout changes proportions, and beyond its figure budget, nothing else.
      *
-     * Wide and tall are the same slate at different shapes — if one of them
-     * dropped a figure or a label to fit, the control would be doing two jobs
-     * and the user would have no way to ask for only one of them.
+     * Layouts sharing a budget are the same slate at different shapes. If one
+     * of them dropped a figure or a label *to fit*, the control would be doing
+     * two jobs and the user would have no way to ask for only one of them —
+     * which is why the budget is a stated number the picker enforces rather
+     * than whatever happens to overflow at render time.
      */
     @Test
-    fun `layout changes the shape but not what is said`() {
-        fun labels(layout: SlateLayout) =
-            renderOverlay(dive, OverlayOptions(layout = layout))
-                .ops.filterIsInstance<SlateOp.Text>().map { it.text }
+    fun `layouts with the same figure budget say the same thing`() {
+        val byBudget = SlateLayout.entries.groupBy { it.maxFigures }
+        for ((budget, layouts) in byBudget) {
+            val reference = labels(layouts.first())
+            for (layout in layouts) {
+                assertEquals(
+                    reference,
+                    labels(layout),
+                    "the ${layout.id} layout says something else at a budget of $budget",
+                )
+            }
+        }
+    }
 
-        assertEquals(labels(SlateLayout.WIDE), labels(SlateLayout.TALL))
+    /**
+     * Spending the budget is the only thing a narrower layout may do to the
+     * content — everything it does show, it shows in full.
+     */
+    @Test
+    fun `a narrower layout drops figures from the end and nothing else`() {
+        val wide = labels(SlateLayout.WIDE)
+        val compact = labels(SlateLayout.COMPACT)
+        assertTrue(
+            compact.size < wide.size,
+            "the compact budget is no longer doing anything, so this proves nothing",
+        )
+        assertEquals(
+            compact,
+            wide.take(compact.size),
+            "compact did not simply stop early; it changed what it says",
+        )
+    }
+
+    /**
+     * The budget binds a hand-picked list too.
+     *
+     * Otherwise the cap is only a default, and the one case it exists for — a
+     * user who picks four figures for a badge with room for two — is exactly
+     * the case that escapes it.
+     */
+    @Test
+    fun `the figure budget binds a hand-picked list as well as an automatic one`() {
+        for (layout in SlateLayout.entries) {
+            val asked = listOf("depth", "time", "deco", "temp", "gf")
+            assertTrue(asked.size > layout.maxFigures, "the fixture no longer overruns ${layout.id}")
+
+            // Figure labels are the only mark the style tracks out at 0.10em,
+            // which counts them without depending on their wording.
+            val shown = renderOverlay(dive, OverlayOptions(layout = layout, stats = asked))
+                .ops.filterIsInstance<SlateOp.Text>()
+                .filter { it.letterSpacingEm == 0.10f }
+                .map { it.text }
+
+            assertEquals(
+                layout.maxFigures,
+                shown.size,
+                "${layout.id} printed $shown against a budget of ${layout.maxFigures}",
+            )
+        }
+    }
+
+    /**
+     * Stacked layouts give each figure a row; columned ones give each a column.
+     *
+     * This is the whole mechanism behind a watch-sized badge carrying numerals
+     * larger than the layout that spans the frame: one column instead of two
+     * roughly doubles the width a numeral has. A style that ignored the metric
+     * and always laid figures out in a row would still draw — and the numbers
+     * would quietly shrink back to a share of the width.
+     */
+    @Test
+    fun `figures are stacked or columned as the layout asks`() {
+        for (layout in SlateLayout.entries) {
+            val m = layout.metrics(SlateLayout.REFERENCE_WIDTH)
+            val labels = renderOverlay(dive, OverlayOptions(layout = layout))
+                .ops.filterIsInstance<SlateOp.Text>()
+                .filter { it.letterSpacingEm == 0.10f }
+            assertTrue(labels.size >= 2, "${layout.id} drew fewer than two figures")
+
+            if (m.figuresStacked) {
+                assertEquals(
+                    1, labels.map { it.x }.distinct().size,
+                    "${layout.id} stacks its figures, so they share a left edge",
+                )
+                assertEquals(
+                    labels.size, labels.map { it.baselineY }.distinct().size,
+                    "${layout.id} stacks its figures, so each needs its own line",
+                )
+            } else {
+                assertEquals(
+                    labels.size, labels.map { it.x }.distinct().size,
+                    "${layout.id} columns its figures, so each needs its own left edge",
+                )
+                assertEquals(
+                    1, labels.map { it.baselineY }.distinct().size,
+                    "${layout.id} columns its figures, so they share a baseline",
+                )
+            }
+        }
+    }
+
+    /**
+     * Stacking is only worth its complexity if the numerals actually grow.
+     *
+     * The watch badge is a third of the wide layout's width, and its figures
+     * are still set larger. If that ever stops being true, the stacked
+     * arrangement is costing a branch in the renderer and buying nothing.
+     */
+    @Test
+    fun `the watch badge sets bigger numerals than the layout spanning the frame`() {
+        val watch = SlateLayout.WATCH.metrics(SlateLayout.REFERENCE_WIDTH)
+        val wide = SlateLayout.WIDE.metrics(SlateLayout.REFERENCE_WIDTH)
+
+        assertTrue(
+            watch.width < wide.width / 2f,
+            "the watch badge is no longer small: ${watch.width}px against ${wide.width}px",
+        )
+        assertTrue(
+            watch.valueSize > wide.valueSize,
+            "stacking bought nothing: ${watch.valueSize}px against ${wide.valueSize}px",
+        )
+    }
+
+    /** A budget of nothing would render a slate with no numbers on it. */
+    @Test
+    fun `every layout has room for at least the two headline figures`() {
+        for (layout in SlateLayout.entries) {
+            assertTrue(
+                layout.maxFigures >= 2,
+                "${layout.id} cannot show both depth and runtime, which every diver reads first",
+            )
+        }
+    }
+
+    /**
+     * A layout may claim less than the canvas, and never more.
+     *
+     * The width is a proportion like any other — a corner badge is narrower
+     * than the frame it sits in — but the canvas is still the bound. A layout
+     * wider than what it was given would be cropped by whatever painted it,
+     * silently, at the right-hand edge.
+     */
+    @Test
+    fun `a layout may be narrower than the canvas but never wider`() {
+        for (layout in SlateLayout.entries) {
+            val m = layout.metrics(SlateLayout.REFERENCE_WIDTH)
+            assertTrue(m.width > 0f, "${layout.id} has no width")
+            assertTrue(
+                m.width <= SlateLayout.REFERENCE_WIDTH,
+                "${layout.id} is ${m.width}px on a ${SlateLayout.REFERENCE_WIDTH}px canvas",
+            )
+            assertTrue(
+                m.width - m.pad * 2 > 0f,
+                "${layout.id} is narrower than its own padding",
+            )
+        }
+    }
+
+    /** The slate's own width scales with the canvas, like every other measure. */
+    @Test
+    fun `a layout keeps its share of the canvas at any size`() {
+        for (layout in SlateLayout.entries) {
+            val full = layout.metrics(SlateLayout.REFERENCE_WIDTH)
+            val half = layout.metrics(SlateLayout.REFERENCE_WIDTH / 2f)
+            assertTrue(
+                abs(half.width * 2f - full.width) < 1e-3f,
+                "${layout.id} width does not scale: ${half.width} vs ${full.width}",
+            )
+        }
+    }
+
+    /**
+     * The figures land where the layout says, not where the style prefers.
+     *
+     * Reading order is the layout's call — a badge that leads with its numbers
+     * and one that leads with its profile are the same marks in a different
+     * order — so a style that hard-coded the sequence would quietly ignore the
+     * control, and the slate would still draw.
+     */
+    @Test
+    fun `the figures are placed on the side of the profile the layout asks for`() {
+        for (layout in SlateLayout.entries) {
+            val slate = renderOverlay(dive, OverlayOptions(layout = layout))
+            // The surface line is the only Line the slate draws, and it is
+            // where the profile starts.
+            val surface = slate.ops.filterIsInstance<SlateOp.Line>()
+                .firstOrNull() ?: fail("${layout.id}: no surface line")
+            val figure = slate.ops.filterIsInstance<SlateOp.Text>()
+                .firstOrNull { it.text == "MAX DEPTH" } ?: fail("${layout.id}: no depth figure")
+
+            if (layout.metrics(SlateLayout.REFERENCE_WIDTH).figuresLead) {
+                assertTrue(
+                    figure.baselineY < surface.start.y,
+                    "${layout.id} leads with its figures but drew them below the profile",
+                )
+            } else {
+                assertTrue(
+                    figure.baselineY > surface.start.y,
+                    "${layout.id} leads with its profile but drew the figures above it",
+                )
+            }
+        }
     }
 }

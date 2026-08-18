@@ -179,6 +179,17 @@ private val STAT_LABELS = listOf(
     "gas" to "Gases",
 )
 
+/**
+ * The chosen figures cut to [budget], keeping the ones that read first.
+ *
+ * In the order [STAT_LABELS] lists them, which is the order the slate prints
+ * them in — so trimming takes off the tail the user would have seen last rather
+ * than whichever entries a set happens to iterate late.
+ */
+private fun Set<String>.trimmedTo(budget: Int): Set<String> =
+    if (size <= budget) this
+    else STAT_LABELS.map { it.first }.filter { it in this }.take(budget).toSet()
+
 @Composable
 fun DiveSlateApp(
     state: LoadState,
@@ -636,7 +647,14 @@ private fun Editor(
             SlateLayout.entries.forEach { candidate ->
                 FilterChip(
                     selected = candidate == layout,
-                    onClick = { layout = candidate },
+                    onClick = {
+                        layout = candidate
+                        // Trim visibly, here, rather than letting the renderer
+                        // drop the overflow: the chips deselect in front of the
+                        // user, so a narrower badge showing fewer figures is
+                        // something they watched happen.
+                        chosenStats = chosenStats.trimmedTo(candidate.maxFigures)
+                    },
                     label = { Text(candidate.label) },
                 )
             }
@@ -683,9 +701,10 @@ private fun Editor(
         }
 
         // ---- figures --------------------------------------------------------
+        val figureBudget = layout.maxFigures
         Label(
-            if (chosenStats.isEmpty()) "Figures — automatic"
-            else "Figures — ${chosenStats.size} chosen"
+            if (chosenStats.isEmpty()) "Figures — automatic, up to $figureBudget"
+            else "Figures — ${chosenStats.size} of $figureBudget"
         )
         ChipRow {
             FilterChip(
@@ -694,10 +713,15 @@ private fun Editor(
                 label = { Text("Auto", fontSize = 12.sp) },
             )
             STAT_LABELS.forEach { (key, label) ->
+                val picked = key in chosenStats
                 FilterChip(
-                    selected = key in chosenStats,
+                    selected = picked,
+                    // Spent budget greys out what is left rather than swapping
+                    // a figure out from under the user: which two a corner
+                    // badge carries is a choice, so it is theirs to unmake.
+                    enabled = picked || chosenStats.size < figureBudget,
                     onClick = {
-                        chosenStats = if (key in chosenStats) chosenStats - key else chosenStats + key
+                        chosenStats = if (picked) chosenStats - key else chosenStats + key
                     },
                     label = { Text(label, fontSize = 12.sp) },
                 )
@@ -705,7 +729,12 @@ private fun Editor(
         }
         if (chosenStats.isNotEmpty()) {
             Text(
-                "A figure this dive did not record is skipped rather than shown blank.",
+                if (chosenStats.size >= figureBudget) {
+                    "A figure this dive did not record is skipped rather than shown blank. " +
+                        "The ${layout.label.lowercase()} layout has room for $figureBudget."
+                } else {
+                    "A figure this dive did not record is skipped rather than shown blank."
+                },
                 color = Muted,
                 fontSize = 12.sp,
             )

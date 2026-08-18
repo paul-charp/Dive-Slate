@@ -1,6 +1,7 @@
 package io.github.paulcharp.diveslate.core
 
 import java.io.File
+import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -121,6 +122,205 @@ class SlateRendererTest {
         val wide = renderOverlay(dive, OverlayOptions(layout = SlateLayout.WIDE))
         val tall = renderOverlay(dive, OverlayOptions(layout = SlateLayout.TALL))
         assertTrue(tall.height > wide.height, "tall (${tall.height}) is not taller than wide (${wide.height})")
+    }
+
+    /**
+     * The compact layout exists to sit in a corner, so it must actually be a
+     * corner-sized block rather than another full-width strip.
+     *
+     * Both halves matter. Narrow without squaring up is just a smaller strip,
+     * and squared without narrowing is a poster — the shape is the whole reason
+     * for the third layout.
+     */
+    @Test
+    fun `the compact layout is a corner badge rather than a strip`() {
+        val wide = renderOverlay(dive, OverlayOptions(layout = SlateLayout.WIDE))
+        val compact = renderOverlay(dive, OverlayOptions(layout = SlateLayout.COMPACT))
+
+        assertTrue(
+            compact.width < wide.width * 0.7f,
+            "compact (${compact.width}px) is not appreciably narrower than wide (${wide.width}px)",
+        )
+        assertTrue(
+            compact.height > wide.height * 0.7f,
+            "compact (${compact.height}px) gave up the height that makes it square-ish",
+        )
+        assertTrue(
+            compact.width / compact.height < wide.width / wide.height,
+            "compact is no squarer than wide",
+        )
+    }
+
+    /**
+     * The profile takes a smaller share of the compact badge.
+     *
+     * That is the point of it: at corner scale a depth curve is a texture, so
+     * the figures lead and the profile says which dive it was. A compact layout
+     * whose curve still dominates has only changed the outline.
+     */
+    @Test
+    fun `the compact layout gives the profile less of the slate`() {
+        fun profileShare(layout: SlateLayout): Float {
+            val slate = renderOverlay(dive, OverlayOptions(layout = layout))
+            return layout.metrics(SlateLayout.REFERENCE_WIDTH).curveHeight / slate.height
+        }
+
+        val compact = profileShare(SlateLayout.COMPACT)
+        val wide = profileShare(SlateLayout.WIDE)
+        assertTrue(
+            compact < wide,
+            "the profile takes $compact of the compact slate against $wide of the wide one",
+        )
+    }
+
+    /**
+     * A figure too wide for its column is shrunk, not left to collide.
+     *
+     * The layout's figure budget is the first defence and handles the ordinary
+     * case — it is why `Air, O2` fits a corner badge at full size. It cannot
+     * handle every case, because one of the figures is a list: a trimix dive on
+     * three mixes prints a value four times the length of any number, and it
+     * overruns its column in *every* layout. Two figures running into each
+     * other leaves neither readable, and dropping one would make the slate
+     * silently say less than it was asked to.
+     *
+     * Advance is estimated from character count here exactly as the renderer
+     * estimates it, because core has no font: it emits a display list and the
+     * app paints it. What the test pins is that the fitting is applied at all,
+     * which is the part that can regress.
+     *
+     * Note there is no lower bound asserted. A floor was tried and removed: it
+     * hands back a size that still does not fit, so the figure overlaps its
+     * neighbour anyway and two columns are lost instead of one being small.
+     */
+    @Test
+    fun `a figure too wide for its column is shrunk to fit`() {
+        // Three mixes, so "Gases" is a sentence rather than a number.
+        val trimix = Dive(
+            samples = listOf(Sample(0.0, 0.0), Sample(600.0, 48.0), Sample(3600.0, 0.0)),
+            gasSwitches = listOf(
+                GasSwitch(0.0, GasMix(o2 = 0.18, he = 0.45)),
+                GasSwitch(1800.0, GasMix(o2 = 0.50)),
+                GasSwitch(3000.0, GasMix(o2 = 1.0)),
+            ),
+        )
+
+        for (layout in SlateLayout.entries) {
+            val m = layout.metrics(SlateLayout.REFERENCE_WIDTH)
+            val slate = renderOverlay(
+                trimix,
+                OverlayOptions(layout = layout, stats = listOf("gas", "depth")),
+            )
+            // A stacked layout hands each figure the whole width; a columned
+            // one splits it. Either way nothing may reach past its own share.
+            val inner = m.width - m.pad * 2
+            val slot = if (m.figuresStacked) inner else inner / 2
+            val gases = slate.texts().first { it.text.contains("Tx18/45") }
+
+            assertTrue(
+                gases.sizePx < m.valueSize,
+                "${layout.id} kept the full ${m.valueSize}px for '${gases.text}' " +
+                    "and ran into the next column",
+            )
+            assertTrue(
+                gases.sizePx > 0f,
+                "${layout.id} shrank a figure out of existence",
+            )
+
+            // Nothing on the figure baseline may reach into the column right of it.
+            for (text in slate.texts()) {
+                if (text.baselineY != gases.baselineY) continue
+                val column = ((text.x - m.pad) / slot).toInt()
+                val right = text.x + text.text.length * text.sizePx * 0.56f
+                assertTrue(
+                    right <= m.pad + (column + 1) * slot,
+                    "${layout.id}: '${text.text}' overruns column $column, ending at $right",
+                )
+            }
+        }
+    }
+
+    /** A figure that fits is typeset at the layout's own size, untouched. */
+    @Test
+    fun `figures that fit keep the layout's figure size`() {
+        for (layout in SlateLayout.entries) {
+            val m = layout.metrics(SlateLayout.REFERENCE_WIDTH)
+            val slate = renderOverlay(dive, OverlayOptions(layout = layout, stats = listOf("depth")))
+            val value = slate.texts().first { it.text == "45" }
+            assertEquals(
+                m.valueSize,
+                value.sizePx,
+                "${layout.id} shrank a figure that had a whole slate to sit in",
+            )
+        }
+    }
+
+    /**
+     * Watch and Compact are two shapes, not two sizes.
+     *
+     * Worth stating precisely, because the obvious claim is false: stacking
+     * makes Watch *taller* than Compact, so their areas come out within a few
+     * percent of each other. What actually separates them is footprint width
+     * and squareness — Watch spends much less of the frame's width, which is
+     * what "put it in a corner" means, and reads as a block rather than a bar.
+     */
+    @Test
+    fun `the watch layout is narrower and squarer than the compact one`() {
+        val watch = renderOverlay(dive, OverlayOptions(layout = SlateLayout.WATCH))
+        val compact = renderOverlay(dive, OverlayOptions(layout = SlateLayout.COMPACT))
+
+        assertTrue(
+            watch.width < compact.width,
+            "watch (${watch.width}px) takes no less width than compact (${compact.width}px)",
+        )
+        val watchOff = abs(1f - watch.width / watch.height)
+        val compactOff = abs(1f - compact.width / compact.height)
+        assertTrue(
+            watchOff < compactOff,
+            "watch is no squarer than compact: $watchOff against $compactOff",
+        )
+        // And both stay corner-sized rather than creeping back to full width.
+        for (slate in listOf(watch, compact)) {
+            assertTrue(
+                slate.width < SlateLayout.REFERENCE_WIDTH / 2f,
+                "a corner badge grew to ${slate.width}px of a 1080px frame",
+            )
+        }
+    }
+
+    /**
+     * A long site name is fitted, not left to run off the badge.
+     *
+     * Every fixture here is a conveniently short name, which is exactly the trap
+     * the trip fixture taught: a corpus assembled from convenient exports has a
+     * shape no real logbook has. `SS Thistlegorm, Sha'ab Ali` needs 379px of the
+     * 340px the watch badge has, and there is no scrim edge to hide the overrun.
+     */
+    @Test
+    fun `a long site name is fitted to the badge`() {
+        val long = "SS Thistlegorm, Sha'ab Ali"
+        val wordy = Dive(
+            samples = listOf(Sample(0.0, 0.0), Sample(600.0, 18.0)),
+            site = long,
+        )
+        val m = SlateLayout.WATCH.metrics(SlateLayout.REFERENCE_WIDTH)
+        val site = renderOverlay(wordy, OverlayOptions(layout = SlateLayout.WATCH))
+            .texts().first { it.text == long.uppercase() }
+
+        assertTrue(site.sizePx < m.siteSize, "the site name was left at full size and overhangs")
+        // Fitting targets the available width exactly, so compare with a
+        // tolerance rather than asserting an exact float equality.
+        val right = site.x + long.length * site.sizePx * 0.56f
+        assertTrue(
+            right <= m.width - m.pad + 0.5f,
+            "the fitted site name still runs past the badge, ending at $right",
+        )
+
+        // A name that fits is left alone.
+        val short = Dive(samples = wordy.samples, site = "Blue Hole")
+        val kept = renderOverlay(short, OverlayOptions(layout = SlateLayout.WATCH))
+            .texts().first { it.text == "BLUE HOLE" }
+        assertEquals(m.siteSize, kept.sizePx, "a site name that fits was shrunk anyway")
     }
 
     /**
