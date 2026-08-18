@@ -34,7 +34,7 @@ tools/         Python. Palette maths and the generators for Themes.kt.
 ## Commands
 
 ```bash
-cd android && ./gradlew core:test          # 52 tests, no device needed
+cd android && ./gradlew core:test          # 72 tests, no device needed
 cd android && ./gradlew :app:installDebug
 cd android && ./gradlew :app:assembleRelease   # signed if keystore.properties
                                                # is present, debug key if not —
@@ -65,7 +65,7 @@ Python, after any palette change:
 uv sync
 uv run python tools/export_theme_tokens.py     # palettes + slider ranges
 uv run python tools/generate_kotlin_themes.py  # -> android/.../Themes.kt
-uv run pytest                                  # 5: 3 that the baked tokens match
+uv run pytest                                  # 10: 8 that the baked tokens match
                                                # the maths, 2 that the release
                                                # manifest matches the app
 uv run ruff check . && uv run ruff format .    # line length 88
@@ -82,10 +82,15 @@ android/core/
   Models.kt           Dive, Sample, GasMix, Cylinder, GasSwitch, DiveLog
   SubsurfaceParser.kt  UddfParser.kt  Detect.kt (content sniffing)
   Xml.kt              DOM wrapper; refuses any document declaring a DOCTYPE
-  Themes.kt           generated — nine palettes as constants, do not hand-edit
+  Themes.kt           generated — 32 palettes as constants, do not hand-edit
   Slate.kt            the display list core emits
   SlateStyle.kt       the three axes: SlateLayout + LayoutMetrics, SlateStyle
+  StyleKit.kt         what the styles share *underneath* the drawing: the frame,
+                      the profile, the stepped ceiling, figure typesetting
   ModernStyle.kt      the default style — the drawing itself
+  WrappedStyle.kt StickerStyle.kt MagazineStyle.kt FrostedStyle.kt
+  HoloStyle.kt RetroStyle.kt TopoStyle.kt MaterialStyle.kt
+                      eight more, one file each
   OverlayRenderer.kt  what the styles share: options, stats, envelope, entry point
 
 android/app/
@@ -96,11 +101,13 @@ android/app/
   ui/DiveSlateApp.kt  Compose UI
 
 tools/
-  palette.py          OKLab/OKLCH maths, CVD simulation, the palette gates
-  theme.py            Theme tokens; hand-built SLATE/LIGHT + seven generated
+  palette.py          OKLab/OKLCH maths, CVD simulation, the palette gates and
+                      the three profiles they come in
+  theme.py            Theme tokens; hand-built SLATE/LIGHT + seven generated,
+                      then STYLE_THEMES — one palette family per style
   export_theme_tokens.py, generate_kotlin_themes.py
   _console.py         UTF-8 stdout, so a summary cannot fail a generation
-  test_themes.py      the three tests that guard the generated tokens
+  test_themes.py      the eight tests that guard the generated tokens
   test_release_contract.py  the workflow and UpdateCheck.kt agree on update.json
 
 docs/RELEASING.md     the keystore, the secrets, and what each refusal protects
@@ -164,11 +171,167 @@ reconciles deliberately, through `SlateStyle.adopt`, which keeps the dark/light
 choice because that is a statement about the footage the slate will land on and
 the incoming style knows nothing about it.
 
-A second style with its own palettes needs its own generated list — `Themes.kt`
-would grow one alongside `SLATE_THEMES`, from `tools/`. Do not let a new style
-borrow `SLATE_THEMES` because the names happen to be there; if its marks differ
-enough to be a different style, they differ enough to move the ΔE measurements
-that justified those colours.
+A style with its own palettes needs its own generated list — `Themes.kt` carries
+one per style alongside `SLATE_THEMES`, all from `tools/`. Do not let a style
+borrow another's because the names happen to be there; if its marks differ enough
+to be a different style, they differ enough to move the ΔE measurements that
+justified those colours. `test_themes.py` fails if two styles share a palette.
+
+Every style also ships **at least one dark and one light palette**, and that is
+structural rather than tidy. `adopt` keeps the mode across a style change because
+the mode is a statement about the footage; a style with no light palette would
+quietly drop that statement on the way in.
+
+## The nine styles, and what a style may trade
+
+Eight styles were added to Modern from a set of mockups. They differ in ornament
+and palette far more than in arrangement — the page is still a heading, a
+profile and some figures, which is why they are styles rather than layouts.
+
+```
+modern    flat and geometric, the default            chromatic  9 palettes
+wrapped   one loud opaque card, sparkles             expressive 2
+sticker   rounded, ringed, a ramped line             expressive 2
+magazine  masthead rules, condensed figures, no card monochrome 2
+frosted   two-stop glass with a lit edge             monochrome 2
+holo      cut-corner panel, dot field, lit trace     expressive 2
+retro     bezel, segment screen, stepped trace       monochrome 3
+topo      grained paper, labelled grid, hachures     expressive 2
+material  header row, wavy rule, figures in chips    expressive 8
+```
+
+What a style is free to change, and what it is not, is the part worth keeping:
+
+* **The ceiling may be re-coloured. The hatch and the dash may not.** See
+  [The colour palettes are computed](#3-the-colour-palettes-are-computed-not-chosen).
+* **A gas switch always prints its mix name**, whatever the art direction.
+  `SlateStyleTest` checks every style for it. The new styles deviate from the
+  designs in *where* and in *what colour*, and both took two attempts:
+
+  - **Where.** A dot on the profile, a dashed leader, and the mix in a tab
+    *straddling the surface line* — not the name set beside the dot. Beside the
+    dot it lands wherever the diver happened to be: on the curve, inside the
+    hatch, off the right edge late in a dive. On an opaque card there is no halo
+    to save it either, since the halo is dropped as pointless on a known
+    background. A label that is mandatory cannot also be the one placed by luck.
+
+    Hanging the tab a fixed distance *below* the surface was the first attempt
+    and it failed at shallow depths for the same reason: the leader shrinks to
+    nothing and the marker rises into the tab, so a switch at three metres drew
+    a disc through its own pill. On the surface line the tab is in the same
+    place whatever the depth, and the leader is drawn only when there is a run
+    to draw. Tabs that would collide step down a row.
+
+    **Paint order settles the rest: marker, leader, then tab.** The tab carries
+    the only text by which this mark may be identified at all, so nothing is
+    permitted to land on top of it — where the marker and the tab overlap, the
+    tab wins. That is a one-line rule and it replaced a fiddlier one that tried
+    to suppress the marker when it fell inside the tab.
+
+    This is the one thing the newer styles gave back to [ModernStyle], which had
+    kept its own beside-the-dot label and was the only style still placing a
+    mandatory label by luck.
+  - **What colour.** The tab is filled with the *panel* colour and outlined in
+    the accent, rather than filled with the accent. Filling it with the accent
+    made the label's legibility depend on a colour chosen to separate from other
+    **marks**, which is a different question: on the wrapped card the accent was
+    the same pink as the water under it, and `O2` in two characters had nothing
+    to be read against. Ink on panel is the one pairing every palette has already
+    had measured. `accent_over_panel` in `tools/theme.py` now holds the accent to
+    3:1 against that panel — the check that would have caught it, where every
+    separation gate passed, because none of the marks they compared was the one
+    behind.
+* **Ornament comes from the log or not at all.** The mockups put
+  `DEPTH TELEMETRY // LIVE` in one corner and a battery gauge in another. Both
+  are instrument dressing that a reader cannot tell from a reading, on a badge
+  about a dive that ended hours ago — the same objection as a derived figure
+  degrading to a guess. Where a corner wants a line, it gets the dive number,
+  and where the log has none it gets nothing.
+* **A style sizes everything through `metrics.px()`,** including ornament, so a
+  legend box or a microcopy line shrinks with the badge instead of swallowing
+  it. Anything the style places against the right edge measures what is already
+  there rather than reserving a fraction of the width — a fraction is a guess
+  that survives Wide and collides at Watch.
+* **A style that puts figures in containers charges the padding to the figure,
+  not to the badge.** `SlateFrame.of` takes a `figureScale` for exactly that, and
+  it is the one sanctioned exception to a style keeping its hands off the type
+  scale. The layout's sizes were chosen for bare numerals — the watch badge sets
+  88px figures precisely *because* nothing surrounds them — so a container that
+  adds its padding on top produces two panels with a sparkline wedged
+  underneath. Material sets 0.58 when stacked. Sizing those chips to their
+  *content* instead was tried and reverted: it fixed nothing the scale had not
+  already fixed, and left a narrow column of pills against half a badge of empty
+  card.
+* **A box is sized with `boxedAdvance`, and its text is centred in it.** Core
+  estimates text width from character count and never measures, so the estimate
+  is sometimes short. Short for a bare label costs a few pixels nobody notices;
+  short for a label with a background puts the text outside its own background,
+  which reads as a bug rather than a layout. Boxes therefore take the wider of
+  the face's two averages plus a margin, and centre what is inside — which turns
+  an overestimate into air at both ends instead of a word hanging off one.
+* **A border is inset by half its stroke.** A stroke on the slate's own edge is
+  centred there, so half of it falls outside the image and is cropped, leaving a
+  hairline on three sides and half a hairline on the fourth.
+* **Panels go behind `showScrim`.** A style that paints its own card puts it
+  under the same switch as the plain scrim, or the control means something
+  different depending on what is selected. Tested.
+* **Type comes from Android's own families** — `sans-serif`, `-medium`,
+  `-black`, `-condensed`, `monospace`, `serif`. The mockups named Windows faces
+  (Haettenschweiler, Bahnschrift, Arial Rounded), none of which exist on a
+  phone, and bundling licensed equivalents would add binaries to the APK for a
+  difference visible at a glance and not at export scale. What does matter is
+  `SlateFont.advance`: core has no font and estimates text width from character
+  count, so each face carries its own average — and **letter spacing is part of
+  that estimate**, since these headings are tracked out to a third of an em and
+  ignoring it leaves the fitting short by half the string. Each face also carries
+  a **separate digit width**, because the slate's figures are nearly all digits
+  and a mean pulled down by letters they never contain places the unit inside
+  the number: in the condensed face the average is 0.46 and a digit is 0.52, so
+  the `m` after a depth landed six pixels into it — worse the larger the figure,
+  which is why it showed first on the style that sets figures biggest.
+
+**The Material style is seeded, never sampled.** Material's other half is
+dynamic colour, where the scheme regenerates from the user's wallpaper, and that
+must not arrive here: a hue off someone's home screen has cleared none of the
+gates, and letting one in would void the whole argument in `tools/palette.py`.
+The scheme is computed at design time from a fixed seed, in OKLCH rather than
+HCT, and then measured like every other palette — Material's method for the
+surfaces, this project's measurement for anything that has to be told apart from
+another mark. Its tertiary role is the example: 60° off an ocean seed lands on
+indigo, ΔE 5.0 against the primary under deuteranopia, so that role is searched
+instead of placed by rule.
+
+**The Material card has no divider.** M3 Expressive's wavy rule sat directly
+above the plot, and there it did not read as a divider at all — it read as a
+second, wobbling surface line a few pixels above the real one, on the one style
+whose water is a flat block with a crisp top edge. A rule that competes with an
+axis is worse than no rule.
+
+**Material's profile is the only curved one, and the curve may not overshoot.**
+It is drawn through a coarser series — a spline through points a pixel apart is a
+polyline with extra arithmetic — using flat tangents, so each segment leaves one
+point horizontally and arrives at the next horizontally and the line stays inside
+the two depths it joins. A nicer-looking spline (Catmull-Rom) overshoots, which
+here would draw the profile deeper than the deepest sample and put the picture at
+odds with the figure beside it. Smoothing may change how the line travels between
+two depths; it may not invent a third. The coarsening keeps each bucket's
+shallowest *and* deepest sample for the same reason, and a test holds it.
+
+Two places where a style touches the data, both deliberate and both narrow:
+
+* **The segment screen resamples the profile to one minute and one metre.** The
+  mockup used two minutes and three, which flattened the reference dive's
+  sawtooth bottom into a staircase and moved its deepest drawn point by nearly
+  two metres while the figure beside it still read 45 m. Nothing was misstated,
+  but the picture had stopped agreeing with the number.
+* **The survey's gridlines come from the dive**, at an interval picked from the
+  depth actually reached, and every line is labelled. The mockup's fixed 15/30/45
+  ruler draws nothing on a 12-metre reef and stops two thirds of the way down a
+  60-metre dive, silently in both cases. Its hachures are the opposite decision:
+  they are texture, so they carry no numbers, sit at a fraction of the profile's
+  weight, and are drawn in the paper's brown rather than the survey blue. If
+  anyone ever asks what interval they are at, delete them rather than inventing
+  one.
 
 ## The fixtures are the contract
 
@@ -348,19 +511,56 @@ that test compares the maths to `themes.json`, not to the Kotlin.
 
 Two findings that are not obvious and cost real debugging:
 
-- **Only base hues ≈180–330° work.** Warm and green bases collide with the fixed
-  deco-ceiling red under CVD. Green measures ΔE 24 against red to normal vision
-  and **2.2** under protanopia.
+- **Only base hues ≈180–330° work** *for a palette built the Modern way*, which
+  is one hue plus the fixed red. Warm and green bases collide with that red under
+  CVD: green measures ΔE 24 to normal vision and **2.2** under protanopia. This
+  still governs `build_theme` and the hue sweep; it is not a rule about colour in
+  general, it is a rule about sharing a picture with a red ceiling.
 - **The sRGB gamut is not a cylinder.** Asking for a fixed chroma across hues
   silently desaturates cyan below the chroma floor. `best_in_band` sweeps for the
   lightness where a hue holds the most chroma.
 
-The ceiling red (`CEILING_ARGB`) is deliberately **not** themed: a hazard colour
-that shifts with the palette stops reading as a hazard.
+**The gates come in three profiles, and the profile is part of the verdict.**
+"Passes" means nothing without saying which bar it cleared, so `PaletteReport`
+carries the profile name and every palette records it — right through to
+`SlateTheme.paletteProfile` in the app.
+
+- `chromatic` — the original bar, unchanged, and still the default for a caller
+  that does not think about it. Modern's nine.
+- `expressive` — a widened lightness band, and **only** for a style that paints
+  its own opaque card. The band exists because a mark on a transparent slate
+  lands on footage of unknown brightness and has to survive both ends; a style
+  that supplies its own background has already answered that. The separation
+  floors do not move: nothing about an opaque card makes protanopia easier.
+- `monochrome` — for a palette that is one ink on purpose. Every check that
+  measures *difference between marks* is inapplicable rather than relaxed, so
+  those report as info and the contrast floor turns fatal in exchange.
+
+**The deco ceiling may now be re-coloured, and the argument that used to forbid
+it has moved rather than been dropped.** It was fixed because a hazard colour
+that shifts with the palette stops reading as a hazard. What changed is the
+recognition that the colour was never carrying the hazard alone: the hatch says
+*region you may not enter* and the stepped dash says *boundary*, and neither
+depends on hue. So a style may substitute — and four do — but:
+
+- **the substitute is measured against the card it lands on.** White on the
+  violet card is fine; white on the yellow one measured 1.43:1 and went back to
+  a red.
+- **the hatch and the dash are not negotiable.** `SlateStyleTest` fails a style
+  that hatches nothing, and fails a one-ink palette whose ceiling edge is solid.
+  Keeping the colour freedom while dropping those marks would be taking the
+  concession and throwing away what justified it.
+- `CEILING_ARGB` is still the red Modern uses in all nine of its palettes, and
+  the value any style should reach for when it keeps a red.
+
+A gate cannot check that two marks differ in *shape*, which is why the
+monochrome profile's promise is kept in the renderer's tests instead. Waiving a
+colour gate without checking the substitute would just be loosening the rule and
+calling it a profile.
 
 Where a mark sits below 3:1 contrast, it is legal **only** because a text label
-carries the identity — gas switches always print the mix name. Don't drop those
-labels to reduce clutter.
+carries the identity — gas switches always print the mix name, in every style,
+and a test checks each one. Don't drop those labels to reduce clutter.
 
 ### 4. Transparency is the product
 
@@ -371,8 +571,14 @@ a label changes constantly.
 
 The opacity control moves the scrim and nothing else, clamped to a per-theme
 floor computed from ink contrast against the worst possible backdrop. Fading the
-marks would void the contrast the gates enforce and turn the hazard red into a
-pink suggestion. Two tests hold that line.
+marks would void the contrast the gates enforce and turn the hazard colour into a
+suggestion. Two tests hold that line.
+
+A style that paints its own opaque card paints it as *the scrim*, so the slider
+still works and the floor still binds — on the violet card that floor is 0.91,
+because lime ink needs nearly all of the card to clear 4.5:1 over white footage.
+The canvas itself is never given a background; an opaque card is an op inside the
+bounds, which is a different thing.
 
 ### 5. Derived figures must degrade to nothing, never to a guess
 
