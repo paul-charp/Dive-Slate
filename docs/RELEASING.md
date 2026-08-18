@@ -7,18 +7,18 @@ to be trustworthy in a way a store would otherwise enforce for you.
 ## Cutting a release
 
 Bump both numbers in [`android/app/build.gradle.kts`](../android/app/build.gradle.kts).
-The tree currently carries `versionCode = 14` / `versionName = "0.4.2"`, so the
+The tree currently carries `versionCode = 15` / `versionName = "0.4.3"`, so the
 release after this one is:
 
 ```kotlin
-versionCode = 15        // must increase; this is what the updater compares
-versionName = "0.4.3"   // must equal the tag without its leading v
+versionCode = 16        // must increase; this is what the updater compares
+versionName = "0.4.4"   // must equal the tag without its leading v
 ```
 
 Write what the release page should say, in `docs/release-notes/<tag>.md`:
 
 ```markdown
-# Dive Slate 0.4.3 — what this one is
+# Dive Slate 0.4.4 — what this one is
 
 Prose the reader actually wants…
 ```
@@ -33,7 +33,7 @@ bytes rather than about the app.
 Commit, then tag and push:
 
 ```bash
-git tag v0.4.3 && git push origin main v0.4.3
+git tag v0.4.4 && git push origin main v0.4.4
 ```
 
 That is the whole ritual. The `Release` workflow builds, signs, verifies and
@@ -41,7 +41,7 @@ publishes. It refuses to publish rather than publish something wrong:
 
 | Check | Why it exists |
 |---|---|
-| Tag matches `versionName` | Otherwise `v0.4.3` ships an APK whose start screen says 0.4.2 |
+| Tag matches `versionName` | Otherwise `v0.4.4` ships an APK whose start screen says 0.4.3 |
 | `versionCode` beats the published one | The updater compares numerically; a code that did not increase is an update nobody is ever offered |
 | `apksigner` says the cert is not `CN=Android Debug` | A debug-signed release installs cleanly, so nothing looks wrong until a properly signed update is refused by every phone that took it |
 | `core:test` | A tag can be pushed at a commit whose CI went red |
@@ -194,11 +194,11 @@ app needs no API call, no token and no knowledge of tag names:
 }
 ```
 
-`versionCode` is the load-bearing field: the comparison is numeric, and a code
-that did not increase is an update nobody is offered. `apkSha256` is shown in the
-app rather than enforced by it — the updater stopped downloading and installing
-at 0.4.1, so the digest is there for anyone verifying a download by hand against
-the `.sha256` asset.
+Both fields the app relies on are load-bearing: `versionCode` because the
+comparison is numeric, and `apkSha256` because the app refuses to install a
+download that does not match it. (Between 0.4.1 and 0.4.2 the app did not
+download at all, and the digest was displayed rather than enforced; 0.4.3
+restored the self-updater and with it the refusal.)
 
 "Latest" here means latest published, non-draft, non-prerelease. Marking a
 release as a prerelease is therefore how you publish a build without offering it
