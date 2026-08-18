@@ -50,6 +50,12 @@ does not need it).
 Setting the toolchain up on Windows was awkward and the failures were silent, so
 for the record:
 
+- **`compileSdk = 37` is not in the stable SDK channel.** The stable repository
+  stops at `platforms;android-36`, and the new naming means the package is
+  `platforms;android-37.0` — `platforms;android-37` matches nothing and
+  `sdkmanager` reports only "Failed to find package". Install it with
+  `--channel=3`, alongside `build-tools;37.0.0`. Worth knowing before concluding
+  the SDK is broken; and worth remembering if CI is ever pinned to stable.
 - **winget's `Google.AndroidStudio` reports `Successfully installed` and exits 0
   without installing anything.** Verify with `winget list`, never the exit code.
 - Anything needing elevation failed in this environment. The SDK was therefore
@@ -94,9 +100,10 @@ android/core/
   OverlayRenderer.kt  what the styles share: options, stats, envelope, entry point
 
 android/app/
-  MainActivity.kt     share intake, the intent handling described below
+  MainActivity.kt     share intake, the intent handling described below,
+                      and the batch export off the main thread
   SlatePainter.kt     paints core's display list onto a Canvas
-  SlateFiles.kt       MediaStore export, FileProvider
+  SlateFiles.kt       MediaStore export, FileProvider, export naming
   UpdateCheck.kt      self-update: manifest, download, checksum, installer
   ui/DiveSlateApp.kt  Compose UI
 
@@ -332,6 +339,59 @@ Two places where a style touches the data, both deliberate and both narrow:
   weight, and are drawn in the paper's brown rather than the survey blue. If
   anyone ever asks what interval they are at, delete them rather than inventing
   one.
+
+## Exporting several dives at once
+
+One selection, one settings object, one slate per dive. The parts worth knowing
+are the ones that exist to stop a batch hiding something.
+
+**The app holds `List<DiveLog>`, not a merged dive list.** Opening several files
+makes provenance load-bearing: two exports overlapping is an ordinary accident,
+and merged they become rows that look identical and cannot be told apart. There
+is no honest key to de-duplicate on either — dive numbers are per-logbook and
+collide across files — so nothing is de-duplicated and the list groups by file
+instead. `DiveRef(log, dive)` is how a dive is addressed from there on.
+
+**Everything the batch could hide is said before it happens**, because a slate
+that is quietly absent, or quietly carrying fewer figures than the one on
+screen, is indistinguishable from a log that never recorded the dive. That is
+the same rule as derived figures degrading to nothing rather than to a guess,
+applied to a screen instead of a number:
+
+* A dive with no samples cannot be rendered, so **the list refuses it** with the
+  reason on the row rather than letting it be selected and dropped at export.
+  `Dive.blockedReason()` is asked before selection, never after a failure.
+* Hand-picked figures the other dives lack are counted in the editor, from
+  `availableStats(dive)` in core — "GF is missing on 3 of 6". Automatic figures
+  need no warning: they already adapt per dive.
+* A partial run reports `Saved 11 of 12` and the first reason, never a bare
+  "done".
+
+**Export runs on `Dispatchers.IO`, one bitmap at a time, and this is not
+optional.** A slate at `EXPORT_SCALE` is roughly 3240×2436 of ARGB_8888 — some
+thirty megabytes — and compressing it takes a visible moment. It used to run
+inline on the click, which was a stutter for one dive and would be an ANR for
+twenty. Rendering happens there too: `ExportRequest` carries *dives*, not
+slates, so building the display lists lands on the background thread rather than
+blocking the click that started it. Parallelising is the thing to refuse — four
+threads means four live bitmaps, and the fourth is an OutOfMemoryError.
+
+**Names are deduplicated in `SlateFiles.exportNames`, not by MediaStore.** One
+timestamp per batch, then dive number and site, so a batch sorts together in the
+gallery. That puts the whole burden of uniqueness on the dive, which is not
+enough on its own — the same dive can appear in two files — so repeats are
+numbered here where it happens deliberately.
+
+**Sharing several images needs every URI in `ClipData`**, not just the first.
+The grant `addFlags` performs does not walk extras, so a batch where only the
+leading image opens fails at the far end, where it cannot be diagnosed. Single
+slates still go out as `ACTION_SEND`; plenty of receivers handle nothing else.
+
+**A file's name comes from `OpenableColumns.DISPLAY_NAME`, never from the URI.**
+`lastPathSegment` is a document id — Downloads hands over `msf:44` — which named
+the list's file headings after provider numbering and threw the real extension
+away before content detection ever saw it. It read correctly for exactly as long
+as the test files were fresh enough to still be `raw:` paths.
 
 ## The fixtures are the contract
 
@@ -621,6 +681,29 @@ the fixtures still encode its behaviour, so these remain worth recording.
   and "/". A slash reads as a ratio beside `GF 70/80`, and `Tx18/45` already
   contains one.
 - **`minSdk` is 29**, for MediaStore scoped storage.
+
+## The chrome is Material You; the slate is not
+
+The app's own surfaces take a dynamic colour scheme from the wallpaper on
+Android 12+, with a fixed blue scheme below that. It is always dark, and not as
+a preference: every screen is chrome around a transparent slate on a
+checkerboard, and a light shell competes with the thing being judged.
+
+**A wallpaper colour must never reach the drawing.** The palettes in `Themes.kt`
+were admitted by measured gates — OKLab ΔE, CVD simulation, contrast — against
+the marks they paint. A colour derived from someone's home screen has cleared
+none of that, and letting one in would void the whole argument in
+`tools/palette.py`. Dynamic colour ends at buttons, chips and text.
+
+Two smaller things that were got wrong once each:
+
+- **`enableEdgeToEdge` needs both bar styles pinned to `dark`.** Left on auto it
+  picks icon colour from the *system* light/dark setting, and this app is dark
+  whichever way the phone is set — on a light-themed phone that produced a dark
+  clock on a near-black bar.
+- **Insets are taken per screen, not by the root.** A `safeDrawingPadding` on the
+  outermost Box stops the contextual selection bar short of the status bar,
+  which reads as a floating strip rather than as the top of the screen.
 
 ## Conventions
 
