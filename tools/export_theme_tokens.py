@@ -27,7 +27,7 @@ from typing import Any
 import theme as theme_mod
 from _console import use_utf8_stdout
 from palette import contrast, validate
-from theme import CEILING, THEMES, Theme, build_theme
+from theme import CEILING, STYLE_THEMES, THEMES, Theme, _rgba_of, build_theme
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -119,11 +119,14 @@ def min_scrim_alpha(scrim: str, ink: str, target: float) -> float | None:
 
 
 def mode_of(theme: Theme) -> str:
-    return (
-        "dark"
-        if contrast(theme.ink, "#000000") > contrast(theme.ink, "#ffffff")
-        else "light"
-    )
+    """The palette's declared mode.
+
+    Inferred from the ink once, which worked while every palette was ink on
+    footage. It stopped working the moment a style painted its own card: the
+    LCD is dark ink on a pale green screen and is a *light* palette, while
+    inferring from the ink calls it dark.
+    """
+    return theme.mode
 
 
 def theme_json(theme: Theme) -> dict[str, Any]:
@@ -145,11 +148,37 @@ def theme_json(theme: Theme) -> dict[str, Any]:
         "accent",
     )
 
+    # The optional tokens are resolved here rather than in Kotlin, so the app
+    # never carries a null and never has to remember what a missing border
+    # should fall back to. "No border" becomes a fully transparent colour, which
+    # paints nothing without anyone testing for it.
+    optional = {
+        "surface_tint": theme.surface_tint or theme.scrim,
+        "surface_edge": theme.surface_edge or "rgba(0,0,0,0)",
+        "ornament": theme.ornament or theme.accent,
+        "curve_end": theme.curve_end or theme.curve,
+        # A palette that declares no containers still gets defined values, so no
+        # style has to test for their absence. They are the nearest honest thing
+        # the palette already holds — a style that actually wants to fill shapes
+        # should declare the pairs and have the contrast checked, rather than
+        # inheriting these.
+        "container_primary": theme.container_primary or theme.curve_fill_top,
+        "on_container_primary": theme.on_container_primary or theme.ink,
+        "container_neutral": theme.container_neutral or theme.grid,
+        "on_container_neutral": theme.on_container_neutral or theme.ink,
+        "container_accent": theme.container_accent or _rgba_of(theme.accent, 0.25),
+        "on_container_accent": theme.on_container_accent or theme.ink,
+        "container_hazard": theme.container_hazard or _rgba_of(theme.ceiling, 0.25),
+        "on_container_hazard": theme.on_container_hazard or theme.ink,
+    }
+
     return {
         "name": theme.name,
         "mode": mode_of(theme),
+        "profile": theme.profile,
         "assumed_surface": theme.assumed_surface,
-        "tokens": {field: token(getattr(theme, field)) for field in colour_fields},
+        "tokens": {field: token(getattr(theme, field)) for field in colour_fields}
+        | {field: token(value) for field, value in optional.items()},
         "type": {
             "font_family": theme.font_family,
             "font_size": theme.font_size,
@@ -268,15 +297,24 @@ def build_payload() -> dict[str, Any]:
     generated it without a test going red.
     """
     sweep = sweep_hues()
-    themes = {name: theme_json(t) for name, t in sorted(THEMES.items())}
+    every = dict(THEMES)
+    for family in STYLE_THEMES.values():
+        every.update({t.name: t for t in family})
+    themes = {name: theme_json(t) for name, t in sorted(every.items())}
 
     # The bar each mode has to clear: whatever the weakest palette already
     # shipped in that mode scores.
+    #
+    # Chromatic palettes only, and that is not a convenience. This floor feeds
+    # the hue control, which builds palettes the Modern way — one hue, the fixed
+    # red, a searched accent — so it has to be set by palettes of that kind. A
+    # monochrome palette scores ΔE 0 by construction, and letting one in would
+    # drop the floor to zero and declare the entire hue circle safe.
     floors = {
         mode: min(
             data["validation"]["worst_cvd_delta_e"]
             for data in themes.values()
-            if data["mode"] == mode
+            if data["mode"] == mode and data["profile"] == "chromatic"
         )
         for mode in sweep
     }
@@ -302,6 +340,14 @@ def build_payload() -> dict[str, Any]:
         "ceiling": CEILING,
         "contrast_targets": {"marks": CONTRAST_MARK, "text": CONTRAST_TEXT},
         "themes": themes,
+        # Which palettes each style offers, in order, default first. A style may
+        # not borrow another's: a palette is measured against the marks it will
+        # be painted as, so the list is only valid for the picture it was
+        # measured on.
+        "style_themes": {
+            style: [t.name for t in family]
+            for style, family in sorted(STYLE_THEMES.items())
+        },
         "hue_sweep": sweep,
         # Everything that merely passes. Recorded for auditing, and deliberately
         # NOT what the UI is built from — see slider_hues.
@@ -335,7 +381,7 @@ def main() -> int:
     for name, data in payload["themes"].items():
         alpha = data["scrim_alpha"]
         print(
-            f"  {name:>8}: scrim {alpha['nominal']} "
+            f"  {name:>21}: [{data['profile'][:4]}] scrim {alpha['nominal']} "
             f"(floor {alpha['min_for_text']} vs {alpha['worst_backdrop']}), "
             f"CVD ΔE {data['validation']['worst_cvd_delta_e']}"
         )

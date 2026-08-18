@@ -2,7 +2,6 @@ package io.github.paulcharp.diveslate.core
 
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import kotlin.math.abs
 import kotlin.math.max
 
 /**
@@ -23,7 +22,8 @@ import kotlin.math.max
  *   contrast in some palettes, which is permitted *only* because the text
  *   carries the identity. Drop the label and the mark becomes one that colour
  *   alone has to distinguish, which it cannot do under colour-vision
- *   deficiency.
+ *   deficiency. The label used to be set beside the marker here; it is now a
+ *   tab on the surface line, shared with every other style — see [gasOps].
  *
  * Ported from the retired Python implementation.
  */
@@ -185,7 +185,20 @@ object ModernStyle : SlateStyle {
         )
 
         if (options.showGas) {
-            ops.addAll(gasOps(dive, ::sx, ::sy, theme, m))
+            // The one piece of this style that came from the newer ones rather
+            // than the other way round. A frame is built here purely to hand
+            // the shared marker the same geometry the closures above use — it
+            // computes the identical numbers, so nothing else about this style
+            // moves, and the gas switch stops being the single place where
+            // Modern draws a label somewhere the others do not.
+            ops.addAll(
+                gasOps(
+                    dive = dive,
+                    frame = SlateFrame.of(dive, options, stats, headingBlock),
+                    theme = theme,
+                    font = SlateFont.SANS,
+                )
+            )
         }
 
         // ---- stats ---------------------------------------------------------
@@ -345,48 +358,6 @@ private fun ceilingOps(
             SlateOp.Path(
                 points = edge, closed = false,
                 strokeArgb = theme.ceiling, strokeWidth = m.px(2.5f),
-            )
-        )
-    }
-    return ops
-}
-
-/**
- * Gas-switch markers, each with the mix name printed beside it.
- *
- * The label is not optional. The accent colour sits below 3:1 contrast in some
- * palettes, which is permitted *only* because the text carries the identity —
- * drop the label to reduce clutter and the mark becomes one that colour alone
- * has to distinguish, which it cannot do under colour-vision deficiency.
- */
-private fun gasOps(
-    dive: Dive,
-    sx: (Double) -> Float,
-    sy: (Double) -> Float,
-    theme: SlateTheme,
-    m: LayoutMetrics,
-): List<SlateOp> {
-    if (dive.samples.isEmpty()) return emptyList()
-    val ops = mutableListOf<SlateOp>()
-
-    for (switch in dive.gasSwitches) {
-        val nearest = dive.samples.minBy { abs(it.timeSeconds - switch.timeSeconds) }
-        val x = sx(switch.timeSeconds)
-        val y = sy(nearest.depthMetres)
-
-        ops.add(
-            SlateOp.Circle(
-                centre = Pt(x, y), radius = m.px(8f),
-                strokeArgb = theme.halo, strokeWidth = m.px(4f),
-            )
-        )
-        ops.add(SlateOp.Circle(centre = Pt(x, y), radius = m.px(8f), fillArgb = theme.accent))
-        ops.add(
-            SlateOp.Text(
-                text = switch.gas.name,
-                x = x + m.px(12f), baselineY = y - m.px(12f), sizePx = m.px(20f),
-                fillArgb = theme.ink, haloArgb = theme.halo, haloWidth = m.px(4f),
-                bold = true,
             )
         )
     }

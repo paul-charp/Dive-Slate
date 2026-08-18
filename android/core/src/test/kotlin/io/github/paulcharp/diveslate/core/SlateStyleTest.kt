@@ -436,4 +436,196 @@ class SlateStyleTest {
             }
         }
     }
+
+    // ---- what a style may not trade away -----------------------------------
+
+    /**
+     * A palette that does not separate its marks by hue must separate them by
+     * shape.
+     *
+     * This is the other half of a decision made in `tools/palette.py`. The
+     * monochrome profile waives the CVD and normal-vision floors — a screen
+     * drawn in one ink cannot pass them and it is not trying to — and in
+     * exchange the claim moves here, because "these two marks differ in dash
+     * and hatching" is not something a colour gate can measure. Waiving the
+     * gate without checking the substitute would be loosening the rule and
+     * calling it a profile.
+     */
+    @Test
+    fun `a one-ink palette separates the ceiling from the profile by form`() {
+        for (style in SLATE_STYLES) {
+            for (theme in style.themes.filter { it.separatesByForm }) {
+                val slate = renderOverlay(
+                    dive,
+                    OverlayOptions(style = style, theme = theme, showCeiling = true),
+                )
+                val paths = slate.ops.filterIsInstance<SlateOp.Path>()
+                assertTrue(
+                    paths.any { it.fill is SlateFill.Hatch },
+                    "${style.id}/${theme.name} drew no hatched ceiling region, so the " +
+                        "hazard rests on a colour this palette does not have",
+                )
+                assertTrue(
+                    paths.any { it.dash != null && it.strokeArgb != null },
+                    "${style.id}/${theme.name} drew the ceiling edge solid, so it is " +
+                        "the profile line in a different place",
+                )
+            }
+        }
+    }
+
+    /**
+     * Every style hatches the ceiling, whatever else it does with it.
+     *
+     * The hatch is what says *region you may not enter*. Styles are free to
+     * re-colour the ceiling — several do, and the substitutes were measured
+     * against the card they land on — but that freedom was granted because the
+     * hatch and the step carry the meaning without help from hue. A style that
+     * kept the colour and dropped the hatch would have taken the concession and
+     * thrown away the reason for it.
+     */
+    @Test
+    fun `every style hatches the deco ceiling`() {
+        for (style in SLATE_STYLES) {
+            val slate = renderOverlay(
+                dive,
+                OverlayOptions(style = style, theme = style.defaultTheme, showCeiling = true),
+            )
+            assertTrue(
+                slate.ops.filterIsInstance<SlateOp.Path>().any { it.fill is SlateFill.Hatch },
+                "${style.id} drew the ceiling without a hatch",
+            )
+        }
+    }
+
+    /**
+     * Every style prints the mix beside a gas switch.
+     *
+     * The accent sits below 3:1 against the surface in several palettes, and
+     * the gates permit that *only* because a text label carries the identity.
+     * Drop the label to reduce clutter and the mark becomes one that colour
+     * alone has to distinguish, which under colour-vision deficiency it cannot.
+     */
+    @Test
+    fun `every style names the mix at a gas switch`() {
+        val switched = dive.copy(
+            gasSwitches = listOf(
+                GasSwitch(
+                    timeSeconds = dive.samples[dive.samples.size / 2].timeSeconds,
+                    gas = GasMix(o2 = 0.5),
+                )
+            )
+        )
+        for (style in SLATE_STYLES) {
+            val slate = renderOverlay(
+                switched,
+                OverlayOptions(style = style, theme = style.defaultTheme, showGas = true),
+            )
+            assertTrue(
+                slate.ops.filterIsInstance<SlateOp.Text>().any { it.text == "EAN50" },
+                "${style.id} drew a gas switch with no mix name beside it",
+            )
+        }
+    }
+
+    /**
+     * Turning the panel off turns the panel off.
+     *
+     * A style that paints its own card has to put it behind the same switch as
+     * the plain scrim, or the control silently means something different
+     * depending on which style is selected — and the one thing a user reaches
+     * for it to do, drop the slate straight onto the footage, would not happen.
+     */
+    @Test
+    fun `no style paints a panel when the scrim is off`() {
+        for (style in SLATE_STYLES) {
+            val slate = renderOverlay(
+                dive,
+                OverlayOptions(style = style, theme = style.defaultTheme, showScrim = false),
+            )
+            val panel = slate.ops.filterIsInstance<SlateOp.Rect>().firstOrNull {
+                it.fill != null &&
+                    it.width >= slate.width * 0.9f &&
+                    it.height >= slate.height * 0.9f
+            }
+            assertEquals(
+                null,
+                panel,
+                "${style.id} painted a full-slate panel with the scrim switched off",
+            )
+        }
+    }
+
+    /**
+     * Ornament stays inside the image.
+     *
+     * The slate's bounds are the exported PNG, so a decoration placed past them
+     * is not soft-edged, it is cropped — and it is cropped only on the layout
+     * that happened to be narrow, which is exactly the kind of thing a test
+     * across the cross-product catches and a glance at one preview does not.
+     */
+    @Test
+    fun `every style keeps its panels and ornament inside the slate`() {
+        for (style in SLATE_STYLES) {
+            for (layout in SlateLayout.entries) {
+                val slate = renderOverlay(
+                    dive,
+                    OverlayOptions(
+                        style = style, layout = layout, theme = style.defaultTheme,
+                    ),
+                )
+                for (rect in slate.ops.filterIsInstance<SlateOp.Rect>()) {
+                    assertTrue(
+                        rect.x >= -0.5f && rect.y >= -0.5f &&
+                            rect.x + rect.width <= slate.width + 0.5f &&
+                            rect.y + rect.height <= slate.height + 0.5f,
+                        "${style.id} in ${layout.id} drew a rectangle at " +
+                            "(${rect.x}, ${rect.y}) ${rect.width}x${rect.height}, " +
+                            "outside a ${slate.width}x${slate.height} slate",
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Reducing the series before curving it must not lose the extreme.
+     *
+     * The Material style draws its profile as a curve, and a spline through
+     * points a pixel apart is a polyline with extra arithmetic — so the series
+     * is coarsened first. That is the moment where a smoothing pass would
+     * quietly become a *data* pass: drop to one sample per bucket and the
+     * deepest point of the dive can fall in a bucket where something shallower
+     * won, leaving the drawn profile shallower than the figure printed beside
+     * it. Both extremes survive instead, which is the same rule `envelope`
+     * follows a pixel at a time.
+     */
+    @Test
+    fun `coarsening the profile keeps its deepest point`() {
+        val points = (0..400).map { step ->
+            // A gentle profile with one narrow spike, which is exactly the shape
+            // a per-bucket average or a first-sample rule would flatten.
+            val depth = if (step == 173) 240f else 60f + (step % 17)
+            Pt(step.toFloat(), depth)
+        }
+        val reduced = coarsened(points, 16f)
+
+        assertTrue(reduced.size < points.size, "coarsening reduced nothing")
+        assertEquals(
+            points.maxOf { it.y },
+            reduced.maxOf { it.y },
+            "the deepest sample did not survive coarsening",
+        )
+        assertEquals(
+            points.minOf { it.y },
+            reduced.minOf { it.y },
+            "the shallowest sample did not survive coarsening",
+        )
+        // Still left to right: a curve drawn through points out of order would
+        // double back on itself.
+        assertTrue(
+            reduced.zipWithNext().all { (a, b) -> a.x <= b.x },
+            "coarsening returned points out of order",
+        )
+    }
 }

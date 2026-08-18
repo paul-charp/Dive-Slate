@@ -247,8 +247,24 @@ interface SlateStyle {
     fun render(dive: Dive, options: OverlayOptions): Slate
 }
 
-/** Every style, default first. */
-val SLATE_STYLES: List<SlateStyle> = listOf(ModernStyle)
+/**
+ * Every style, default first.
+ *
+ * Ordered by how far each departs from a plain reading of the dive, because
+ * that is the order someone scanning the picker is deciding in: Modern states
+ * the numbers, and the last few are pictures with numbers in them.
+ */
+val SLATE_STYLES: List<SlateStyle> = listOf(
+    ModernStyle,
+    WrappedStyle,
+    StickerStyle,
+    MagazineStyle,
+    FrostedStyle,
+    HoloStyle,
+    RetroStyle,
+    TopoStyle,
+    MaterialStyle,
+)
 
 fun styleById(id: String): SlateStyle? = SLATE_STYLES.firstOrNull { it.id == id }
 

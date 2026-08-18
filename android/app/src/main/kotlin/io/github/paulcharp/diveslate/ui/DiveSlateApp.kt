@@ -670,17 +670,28 @@ private fun Editor(
         }
 
         // ---- palette --------------------------------------------------------
-        Label("Palette — for dark footage")
+        // Grouped by mode rather than named by footage, because the two mean
+        // different things depending on the style: for one that paints no card
+        // the mode is a statement about the frame behind it, and for one that
+        // paints its own it describes the card. The line below says both rather
+        // than a label that is right for half the styles.
+        Label("Palette — dark")
         PaletteRow(style.themes.filter { it.isDark }, theme) { picked ->
             theme = picked
             opacity = opacity.coerceAtLeast(picked.scrimAlphaMin)
         }
 
-        Label("Palette — for pale backgrounds")
+        Label("Palette — light")
         PaletteRow(style.themes.filter { !it.isDark }, theme) { picked ->
             theme = picked
             opacity = opacity.coerceAtLeast(picked.scrimAlphaMin)
         }
+        Text(
+            "Dark suits dark footage; light suits a pale background — or, on a " +
+                "style with its own card, describes the card.",
+            color = Muted,
+            fontSize = 12.sp,
+        )
 
         // ---- panel opacity --------------------------------------------------
         Label("Panel opacity  ${(opacity.coerceIn(minOpacity, 1f) * 100).toInt()}%")

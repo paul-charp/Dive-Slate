@@ -28,11 +28,17 @@ from dataclasses import dataclass
 
 __all__ = [
     "BAND",
+    "CHROMATIC",
+    "EXPRESSIVE",
+    "MONOCHROME",
+    "PROFILES",
     "CheckResult",
+    "Gates",
     "PaletteReport",
     "best_in_band",
     "contrast",
     "delta_e",
+    "gates_for",
     "hex_to_oklch",
     "max_chroma",
     "oklch_to_hex",
@@ -49,6 +55,118 @@ CHROMA_FLOOR = 0.10
 CVD_TARGET, CVD_FLOOR = 8.0, 6.0
 NORMAL_FLOOR = 15.0
 CONTRAST_MIN = 3.0
+
+
+@dataclass(frozen=True, slots=True)
+class Gates:
+    """One profile's thresholds, and how this palette separates its marks.
+
+    The original gates were written for a single style, and they encode more
+    than measurements: they assume the marks are told apart *by hue*, over a
+    panel, with a fixed hazard red among them. That assumption is what makes a
+    lime curve illegal and a white one meaningless, and it stops being true the
+    moment a second style draws its ceiling as a dashed white line on an opaque
+    violet card.
+
+    So the thresholds move to a profile rather than being loosened in place.
+    Loosening in place would leave one suite quietly failing to certify anything
+    in particular; a profile has to say which claim it is making, and
+    :attr:`separation` is that claim.
+
+    :attr:`separation` is the load-bearing field:
+
+    ``"hue"``
+        The marks differ in colour, and the CVD and normal-vision floors are
+        what proves it. Fatal when they fail.
+    ``"form"``
+        The marks are one ink and differ in *shape* — dash, stroke width,
+        hatching. Colour separation is still measured and recorded, but it is
+        not the evidence, so it cannot be the gate. What replaces it is a
+        contrast floor that becomes fatal (ink has nothing else to lean on) and
+        a check in the renderer's own tests that the marks really do differ in
+        form, which is the only place that claim can be checked at all.
+    """
+
+    name: str
+    band: dict[str, tuple[float, float]]
+    chroma_floor: float
+    cvd_target: float
+    cvd_floor: float
+    normal_floor: float
+    contrast_min: float
+    contrast_fatal: bool
+    separation: str  # "hue" | "form"
+
+
+#: The gates the nine Modern palettes cleared, unchanged.
+CHROMATIC = Gates(
+    name="chromatic",
+    band=BAND,
+    chroma_floor=CHROMA_FLOOR,
+    cvd_target=CVD_TARGET,
+    cvd_floor=CVD_FLOOR,
+    normal_floor=NORMAL_FLOOR,
+    contrast_min=CONTRAST_MIN,
+    contrast_fatal=False,
+    separation="hue",
+)
+
+#: For styles whose card is opaque and whose colour is the point.
+#:
+#: The lightness band exists because a mark on a *transparent* slate lands on
+#: footage of unknown brightness, so it has to survive both ends. A style that
+#: paints its own opaque card has already answered that question — the mark is
+#: read against a known background — which is why the band widens here and only
+#: here. The separation floors do not move: they are about the eye, not about
+#: the backdrop, and nothing about an opaque card makes protanopia easier.
+EXPRESSIVE = Gates(
+    name="expressive",
+    band={"light": (0.15, 1.0), "dark": (0.15, 1.0)},
+    chroma_floor=0.04,
+    cvd_target=CVD_TARGET,
+    cvd_floor=CVD_FLOOR,
+    normal_floor=NORMAL_FLOOR,
+    contrast_min=CONTRAST_MIN,
+    contrast_fatal=False,
+    separation="hue",
+)
+
+#: For styles drawn in a single ink: the magazine masthead, the LCD screen,
+#: frosted glass.
+#:
+#: Every colour check that measures *difference between marks* is inapplicable
+#: here rather than merely relaxed, because the marks are the same colour on
+#: purpose. They are still measured and reported, so the numbers are on the
+#: record, but they report as info: a gate that always fails proves nothing, and
+#: one silently dropped to zero proves less. The contrast floor turns fatal in
+#: exchange, since ink with no hue to spend has only its lightness left.
+MONOCHROME = Gates(
+    name="monochrome",
+    band={"light": (0.0, 1.0), "dark": (0.0, 1.0)},
+    chroma_floor=0.0,
+    cvd_target=CVD_TARGET,
+    cvd_floor=CVD_FLOOR,
+    normal_floor=NORMAL_FLOOR,
+    contrast_min=CONTRAST_MIN,
+    contrast_fatal=True,
+    separation="form",
+)
+
+PROFILES: dict[str, Gates] = {
+    profile.name: profile for profile in (CHROMATIC, EXPRESSIVE, MONOCHROME)
+}
+
+
+def gates_for(profile: str | Gates) -> Gates:
+    if isinstance(profile, Gates):
+        return profile
+    try:
+        return PROFILES[profile]
+    except KeyError:
+        raise ValueError(
+            f"unknown palette profile {profile!r}; have {sorted(PROFILES)}"
+        ) from None
+
 
 DEFAULT_SURFACE = {"light": "#fcfcfb", "dark": "#1a1a19"}
 
@@ -187,7 +305,9 @@ def delta_e(a: str, b: str, kind: str | None = None) -> float:
 @dataclass(frozen=True, slots=True)
 class CheckResult:
     name: str
-    state: str  # "pass" | "warn" | "fail"
+    #: "pass" | "warn" | "fail" | "info". "info" is a check that does not
+    #: apply to this profile: measured and recorded, but not evidence.
+    state: str
     detail: str
 
     @property
@@ -200,6 +320,8 @@ class PaletteReport:
     checks: tuple[CheckResult, ...]
     worst_cvd: float
     worst_normal: float
+    #: Which gates produced this verdict. A "PASS" means nothing without it.
+    profile: str = "chromatic"
 
     @property
     def ok(self) -> bool:
@@ -212,7 +334,8 @@ class PaletteReport:
     def summary(self) -> str:
         verdict = "PASS" if self.ok else "FAIL"
         return (
-            f"{verdict}  CVD ΔE {self.worst_cvd:.1f}  normal ΔE {self.worst_normal:.1f}"
+            f"{verdict} [{self.profile}]  CVD ΔE {self.worst_cvd:.1f}  "
+            f"normal ΔE {self.worst_normal:.1f}"
         )
 
     def __str__(self) -> str:
@@ -223,21 +346,47 @@ class PaletteReport:
         return "\n".join(lines)
 
 
+#: Chroma at or below which a colour is a neutral by construction — white,
+#: black, a true grey — rather than a hue that lost its saturation.
+NEUTRAL_CHROMA = 0.02
+
+
+def _is_neutral(value: str) -> bool:
+    """Whether this colour is achromatic on purpose.
+
+    The chroma floor exists to catch a mark *meant* as a hue that came out grey,
+    and that failure lands in the ambiguous middle — chroma around 0.03 to 0.09,
+    saturated enough to have been intended and too flat to read. A mark at
+    chroma zero is not that: nothing lands exactly on zero by accident, so it
+    was typed as a neutral, and a white ceiling on a violet card is a decision
+    rather than a slip.
+    """
+    _, chroma, _ = hex_to_oklch(value)
+    return chroma <= NEUTRAL_CHROMA
+
+
 def validate(
     colours: list[str],
     *,
     mode: str = "dark",
     surface: str | None = None,
     pairs: str = "all",
+    profile: str | Gates = "chromatic",
 ) -> PaletteReport:
     """Run the six checks over the colour-bearing marks of a palette.
 
     ``pairs="all"`` is the right setting for this renderer: the marks scatter
     across the plot rather than sitting in a fixed stacking order, so any two
     can end up side by side.
+
+    ``profile`` selects the thresholds and, more importantly, what this suite is
+    being asked to certify — see :class:`Gates`. It defaults to ``"chromatic"``,
+    so a caller that does not think about it gets the strictest set.
     """
     surface = surface or DEFAULT_SURFACE[mode]
-    low, high = BAND[mode]
+    gates = gates_for(profile)
+    by_hue = gates.separation == "hue"
+    low, high = gates.band[mode]
     checks: list[CheckResult] = []
 
     off_band = [
@@ -255,18 +404,26 @@ def validate(
         )
     )
 
+    # A near-white or near-black mark is a neutral on purpose — the white
+    # ceiling on an opaque card, say — not a hue that desaturated into grey,
+    # which is the failure this floor exists to catch. Exempting them by
+    # lightness keeps the check aimed at the thing it was written for. It
+    # changes nothing for the chromatic palettes: none of their marks are
+    # neutral, so none are exempt.
     low_chroma = [
         (c, round(hex_to_oklch(c)[1], 3))
         for c in colours
-        if hex_to_oklch(c)[1] < CHROMA_FLOOR
+        if hex_to_oklch(c)[1] < gates.chroma_floor and not _is_neutral(c)
     ]
     checks.append(
         CheckResult(
             "Chroma floor",
-            "fail" if low_chroma else "pass",
-            f"reads grey: {low_chroma}"
+            "info" if gates.chroma_floor <= 0.0 else "fail" if low_chroma else "pass",
+            "waived: this palette is one ink"
+            if gates.chroma_floor <= 0.0
+            else f"reads grey: {low_chroma}"
             if low_chroma
-            else f"all {len(colours)} ≥ {CHROMA_FLOOR}",
+            else f"all {len(colours)} ≥ {gates.chroma_floor}",
         )
     )
 
@@ -288,11 +445,13 @@ def validate(
 
     cvd_state = (
         "pass"
-        if worst_cvd >= CVD_TARGET
+        if worst_cvd >= gates.cvd_target
         else "warn"
-        if worst_cvd >= CVD_FLOOR
+        if worst_cvd >= gates.cvd_floor or not by_hue
         else "fail"
     )
+    if not by_hue:
+        cvd_state = "info"
     checks.append(
         CheckResult(
             "CVD separation",
@@ -314,7 +473,11 @@ def validate(
     checks.append(
         CheckResult(
             "Normal-vision floor",
-            "pass" if worst_normal >= NORMAL_FLOOR else "fail",
+            "info"
+            if not by_hue
+            else "pass"
+            if worst_normal >= gates.normal_floor
+            else "fail",
             f"worst {worst_normal_pair[0]}↔{worst_normal_pair[1]} ΔE {worst_normal:.1f}"
             if pairlist
             else "single mark",
@@ -324,19 +487,25 @@ def validate(
     dim = [
         (c, round(contrast(c, surface), 2))
         for c in colours
-        if contrast(c, surface) < CONTRAST_MIN
+        if contrast(c, surface) < gates.contrast_min
     ]
     checks.append(
         CheckResult(
             "Contrast vs surface",
-            "warn" if dim else "pass",
-            f"below {CONTRAST_MIN}:1, needs a text label: {dim}"
+            ("fail" if gates.contrast_fatal else "warn") if dim else "pass",
+            f"below {gates.contrast_min}:1"
+            + (
+                ", and nothing else separates these marks"
+                if gates.contrast_fatal
+                else ", needs a text label"
+            )
+            + f": {dim}"
             if dim
-            else f"all {len(colours)} ≥ {CONTRAST_MIN}:1",
+            else f"all {len(colours)} ≥ {gates.contrast_min}:1",
         )
     )
 
-    return PaletteReport(tuple(checks), worst_cvd, worst_normal)
+    return PaletteReport(tuple(checks), worst_cvd, worst_normal, gates.name)
 
 
 # ---------------------------------------------------------------------------
@@ -364,7 +533,11 @@ def max_chroma(big_l: float, hue_deg: float, limit: float = 0.4) -> float:
 
 
 def best_in_band(
-    hue_deg: float, mode: str, ceiling: float = 0.16
+    hue_deg: float,
+    mode: str,
+    ceiling: float = 0.16,
+    *,
+    profile: str | Gates = "chromatic",
 ) -> tuple[float, float]:
     """``(lightness, chroma)`` for the most saturated usable version of a hue.
 
@@ -375,7 +548,7 @@ def best_in_band(
     the lightness that admits the most chroma avoids that without hand-tuning
     each hue.
     """
-    low, high = BAND[mode]
+    low, high = gates_for(profile).band[mode]
     steps = 40
     best = (low, 0.0)
     for index in range(steps + 1):
@@ -386,42 +559,48 @@ def best_in_band(
     return best
 
 
-def snap_to_band(value: str, mode: str) -> str:
+def snap_to_band(value: str, mode: str, *, profile: str | Gates = "chromatic") -> str:
     """Move a colour into the mode's lightness band, keeping its hue usable.
 
     Chroma is raised to the floor where the gamut allows it, and where it does
     not the lightness moves to wherever that hue is most saturated — a colour
     that lands below the chroma floor reads as grey and stops being a hue at all.
     """
-    low, high = BAND[mode]
+    gates = gates_for(profile)
+    low, high = gates.band[mode]
     big_l, chroma, hue = hex_to_oklch(value)
     target = min(high - 0.01, max(low + 0.01, big_l))
 
-    wanted = max(chroma, CHROMA_FLOOR + 0.02)
-    if min(max_chroma(target, hue), wanted) < CHROMA_FLOOR + 0.01:
-        target, wanted = best_in_band(hue, mode)
+    floor = max(gates.chroma_floor, 0.01)
+    wanted = max(chroma, floor + 0.02)
+    if min(max_chroma(target, hue), wanted) < floor + 0.01:
+        target, wanted = best_in_band(hue, mode, profile=gates)
 
     return oklch_to_hex(target, wanted, hue)
 
 
 def pick_accent(
-    curve: str,
-    ceiling: str,
-    *,
+    *marks: str,
     mode: str = "dark",
     surface: str | None = None,
     step_deg: int = 6,
+    profile: str | Gates = "chromatic",
 ) -> str:
     """Choose the gas-switch accent by search rather than by eye.
 
     Walks the hue circle at the mode's mid-lightness and keeps the candidate
-    whose *worst* separation from the curve and the ceiling is largest, so the
-    accent is as far from both as the gamut allows. Searching beats picking:
-    the same hue that reads well beside a blue curve can collapse against a
-    teal one, and only measuring catches that.
+    whose *worst* separation from every given mark is largest, so the accent is
+    as far from all of them as the gamut allows. Searching beats picking: the
+    same hue that reads well beside a blue curve can collapse against a teal
+    one, and only measuring catches that.
+
+    ``marks`` is variadic because a style may put more than two colours on the
+    plot — a gradient curve has two ends, and an accent measured against only
+    one of them is measured against half the picture.
     """
     surface = surface or DEFAULT_SURFACE[mode]
-    low, high = BAND[mode]
+    gates = gates_for(profile)
+    low, high = gates.band[mode]
     lightness = (low + high) / 2
 
     best, best_score = "#c98500", -math.inf
@@ -429,7 +608,7 @@ def pick_accent(
         for chroma in (0.16, 0.13, 0.10):
             candidate = oklch_to_hex(lightness, chroma, hue)
             got_l, got_c, _ = hex_to_oklch(candidate)
-            if got_c < CHROMA_FLOOR or not low <= got_l <= high:
+            if got_c < gates.chroma_floor or not low <= got_l <= high:
                 continue
 
             separations = [
@@ -437,16 +616,16 @@ def pick_accent(
                     delta_e(candidate, other, "protan"),
                     delta_e(candidate, other, "deutan"),
                 )
-                for other in (curve, ceiling)
+                for other in marks
             ]
-            normals = [delta_e(candidate, other) for other in (curve, ceiling)]
+            normals = [delta_e(candidate, other) for other in marks]
             # A candidate that fails the hard normal-vision gate is unusable no
             # matter how well it separates under simulation.
-            if min(normals) < NORMAL_FLOOR:
+            if min(normals) < gates.normal_floor:
                 continue
 
-            score = min(*separations, min(normals) / 2)
-            if contrast(candidate, surface) < CONTRAST_MIN:
+            score = min(min(separations), min(normals) / 2)
+            if contrast(candidate, surface) < gates.contrast_min:
                 score -= 2.0  # usable, but leans on its text label
             if score > best_score:
                 best, best_score = candidate, score
