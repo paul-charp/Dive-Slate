@@ -46,6 +46,19 @@ object ModernStyle : SlateStyle {
      */
     override val themes: List<SlateTheme> = SLATE_THEMES
 
+    /**
+     * Opens at 85%, above every palette's nominal.
+     *
+     * The nominal is the contrast maths answering its own question — the least
+     * panel that still clears the ratio over the worst possible backdrop. That
+     * is a floor with the margin shaved off, and this style's marks are set
+     * over footage rather than over the worst case: video moves, and a panel
+     * sized to just barely pass on a still frame reads as a smear on a busy
+     * one. Starting high and letting the slider come down puts the legible
+     * version in front of the user first.
+     */
+    override val defaultScrimAlpha: Float = 0.85f
+
     override fun render(dive: Dive, options: OverlayOptions): Slate {
         val theme = options.theme
         val m = options.metrics

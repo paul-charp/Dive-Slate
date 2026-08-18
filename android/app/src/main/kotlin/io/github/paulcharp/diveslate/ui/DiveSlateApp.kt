@@ -144,12 +144,21 @@ data class Updates(
 /**
  * Checkerboard greys.
  *
- * Deliberately light. Beyond indicating transparency, a white-ish backdrop is
- * exactly the worst case the dark palettes' scrim floors were computed against,
- * so a slate that holds up here holds up anywhere.
+ * Mid-grey rather than the near-white this started as. Both readings of the
+ * backdrop are legitimate — it indicates transparency, and it stands in for the
+ * footage the slate will land on — and they want opposite things. White is the
+ * worst case the dark palettes' scrim floors were computed against, so a slate
+ * that held up over it held up anywhere; but it is not what anyone drops a
+ * slate onto, and it made every dark palette look as though it were fighting
+ * the backdrop.
+ *
+ * The floor is unaffected either way: it is computed against white in
+ * [io.github.paulcharp.diveslate.core.SlateTheme.scrimAlphaMin] and still binds
+ * the slider. What changed is that the preview no longer shows that case, only
+ * the typical one.
  */
-private const val CHECKER_LIGHT = 0xFFE7EAEC
-private const val CHECKER_DARK = 0xFFAFB6BA
+private const val CHECKER_LIGHT = 0xFF5E666B
+private const val CHECKER_DARK = 0xFF4A5257
 private val CHECKER_CELL = 22.dp
 
 private val Surface = Color(0xFF0B1013)
@@ -548,7 +557,7 @@ private fun Editor(
     var theme by remember { mutableStateOf(initialStyle.defaultTheme) }
 
     var showBackdrop by remember { mutableStateOf(true) }
-    var opacity by remember { mutableFloatStateOf(initialStyle.defaultTheme.scrimAlphaNominal) }
+    var opacity by remember { mutableFloatStateOf(initialStyle.defaultScrimAlpha) }
 
     var showSite by remember { mutableStateOf(true) }
     var showDate by remember { mutableStateOf(false) }
@@ -764,29 +773,41 @@ private fun Editor(
     }
 }
 
-/** How much of the preview's width the slate occupies. */
-private const val SLATE_FRACTION = 0.86f
+/** How much of the preview's width the reference frame occupies. */
+private const val CANVAS_FRACTION = 0.86f
 
-/** Backdrop kept around the slate, as a multiple of its own height. */
-private const val PREVIEW_MARGIN = 1.28f
+/**
+ * The preview frame's own proportions, width over height.
+ *
+ * A constant, so that changing the layout changes the slate and nothing else.
+ * It is set by rendering rather than by arithmetic: across every log in
+ * `conformance/data` the tallest slate any layout produces is Tall at 812px on
+ * the 1080px reference canvas, and at this ratio that lands inside the frame
+ * with backdrop still showing around it.
+ */
+private const val PREVIEW_RATIO = 1.2f
 
 @Composable
 private fun Preview(slate: Slate?, showBackdrop: Boolean) {
-    // Sized from the slate rather than to a 9:16 story frame: the slate is the
-    // deliverable, and the backdrop is only there to judge legibility against.
-    val ratio = slate?.let {
-        val drawnHeight = SLATE_FRACTION * (it.height / it.width)
-        (1f / (drawnHeight * PREVIEW_MARGIN)).coerceIn(0.7f, 2.6f)
-    } ?: (4f / 3f)
-
-    Box(Modifier.fillMaxWidth().aspectRatio(ratio).clip(RoundedCornerShape(14.dp))) {
+    // A fixed frame standing in for the shot, rather than a box sized to the
+    // slate. Scaling every layout up to the same width made a 400px corner
+    // badge and a 1080px full-width strip look alike — the one difference
+    // between them that matters is how much of the frame they take, and the
+    // preview was the only place it could have been seen.
+    Box(Modifier.fillMaxWidth().aspectRatio(PREVIEW_RATIO).clip(RoundedCornerShape(14.dp))) {
         Canvas(Modifier.fillMaxSize()) {
             if (showBackdrop) drawCheckerboard()
             val current = slate ?: return@Canvas
 
-            val target = size.width * SLATE_FRACTION
-            val factor = target / current.width
-            val left = (size.width - target) / 2f
+            // Quoted against the reference canvas, so the scale is the same for
+            // every layout and each one draws at its own share of it. The
+            // second term only ever binds for a slate taller than the frame
+            // allows, where shrinking to fit beats cropping the marks off.
+            val factor = minOf(
+                size.width * CANVAS_FRACTION / SlateLayout.REFERENCE_WIDTH,
+                size.height * CANVAS_FRACTION / current.height,
+            )
+            val left = (size.width - current.width * factor) / 2f
             val top = (size.height - current.height * factor) / 2f
 
             translate(left, top) {

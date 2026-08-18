@@ -231,6 +231,18 @@ interface SlateStyle {
 
     val defaultTheme: SlateTheme get() = themes.first()
 
+    /**
+     * Where the panel-opacity control starts.
+     *
+     * A starting point, not a limit. [SlateTheme.scrimAlphaMin] is still the
+     * floor and stays the palette's to set, since it is measured — it is where
+     * that ink stops clearing 4.5:1 against the worst backdrop. This is the
+     * style's judgement about how much panel its own marks want before anyone
+     * touches the slider, which is a different question and belongs to whoever
+     * draws them.
+     */
+    val defaultScrimAlpha: Float get() = defaultTheme.scrimAlphaNominal
+
     /** Produce the display list. [dive] is guaranteed to have samples. */
     fun render(dive: Dive, options: OverlayOptions): Slate
 }
