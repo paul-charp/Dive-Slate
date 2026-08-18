@@ -419,6 +419,35 @@ class SlateRendererTest {
         }
     }
 
+    /**
+     * [availableStats] has to agree with what the renderer actually produces,
+     * because the editor warns from the first about slates drawn by the second.
+     * A disagreement would warn about a figure that renders fine, or — worse —
+     * stay quiet about one that silently vanishes from half a batch.
+     */
+    @Test
+    fun `availableStats agrees with what resolveStats can build`() {
+        val available = availableStats(dive)
+        for (key in STAT_KEYS) {
+            val built = resolveStats(dive, OverlayOptions(stats = listOf(key))).isNotEmpty()
+            assertEquals(built, key in available, "availableStats disagrees about '$key'")
+        }
+    }
+
+    /** A dive the log barely recorded still answers, and answers with less. */
+    @Test
+    fun `availableStats shrinks for a dive carrying nothing derived`() {
+        val bare = Dive(samples = dive.samples)
+        val available = availableStats(bare)
+        // Depth and runtime come from the samples themselves, so they survive.
+        assertTrue("depth" in available, "depth should always be available")
+        assertTrue("time" in available, "runtime should always be available")
+        // These need cylinders, a label, or switches the bare dive has none of.
+        assertTrue("gf" !in available, "a dive with no label has no GFs")
+        assertTrue("used" !in available, "a dive with no cylinders has no gas used")
+        assertTrue("gas" !in available, "a dive with no switches has no mixes")
+    }
+
     @Test
     fun `an unknown stat key is refused`() {
         try {

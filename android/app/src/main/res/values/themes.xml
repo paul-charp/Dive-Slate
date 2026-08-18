@@ -1,12 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!--
-      Compose draws the whole UI, so this only needs to set the window up.
-      Dark because the app is mostly a preview surface for imagery.
+      Compose draws the whole UI, so this only needs to set the window up and
+      pick the colour of the launch flash before the first frame.
+
+      The system bars are left to enableEdgeToEdge, which makes them
+      transparent and lets the app bars paint behind them. Setting a colour here
+      as well would fight it, and on Android 15+ the colour attributes are
+      ignored regardless. Dark because the app is mostly a preview surface for
+      imagery.
     -->
     <style name="Theme.DiveSlate" parent="android:Theme.Material.NoActionBar">
-        <item name="android:statusBarColor">#0B1013</item>
-        <item name="android:navigationBarColor">#0B1013</item>
         <item name="android:windowBackground">#0B1013</item>
     </style>
 </resources>

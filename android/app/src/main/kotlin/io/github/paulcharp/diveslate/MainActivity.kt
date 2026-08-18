@@ -1,12 +1,16 @@
 package io.github.paulcharp.diveslate
 
 import android.content.ClipData
+import android.graphics.Color
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.OpenableColumns
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.SystemBarStyle
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -14,8 +18,11 @@ import androidx.lifecycle.lifecycleScope
 import io.github.paulcharp.diveslate.core.DiveLog
 import io.github.paulcharp.diveslate.core.ParseException
 import io.github.paulcharp.diveslate.core.parseText
+import io.github.paulcharp.diveslate.core.renderOverlay
 import io.github.paulcharp.diveslate.ui.DiveSlateApp
+import io.github.paulcharp.diveslate.ui.ExportState
 import io.github.paulcharp.diveslate.ui.LoadState
+import io.github.paulcharp.diveslate.ui.Notice
 import io.github.paulcharp.diveslate.ui.UpdateState
 import io.github.paulcharp.diveslate.ui.Updates
 import io.github.paulcharp.diveslate.ui.withMessage
@@ -25,20 +32,36 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
- * Single activity: receive a dive log, preview the slate, export it.
+ * Single activity: receive one or more dive logs, preview the slate, export it.
  *
  * The flow is deliberately short. From tapping Export in Subsurface-mobile to a
  * finished slate should be about three taps, so the only decision on the path is
- * which dive — and only when the export holds more than one. Everything else is
- * a setting with a remembered default.
+ * which dive — or which dives, when the export holds more than one and the user
+ * wants a slate for several. Everything else is a setting with a remembered
+ * default.
  */
 class MainActivity : ComponentActivity() {
 
     private var state by mutableStateOf<LoadState>(LoadState.Empty)
     private var updateState by mutableStateOf<UpdateState>(UpdateState.Idle)
+    private var exportState by mutableStateOf<ExportState>(ExportState.Idle)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Content runs under the system bars, which is how an Android app has
+        // looked since 15 and is mandatory from targetSdk 36 anyway. The
+        // compose side takes the insets per screen, so an app bar can paint its
+        // own colour behind the status bar instead of stopping short of it.
+        //
+        // Both bars are pinned to the dark style rather than left on auto.
+        // Auto picks its icon colour from the system's light/dark setting, and
+        // this app is dark whatever the phone is set to — on a light-themed
+        // phone that gave dark clock and battery glyphs on a near-black bar,
+        // which is unreadable.
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+        )
         // Guarded, and before setContent: an unexpected intent must not kill
         // the activity before there is a screen on which to say so. A share
         // that launches nothing looks identical to a share that did nothing.
@@ -57,11 +80,12 @@ class MainActivity : ComponentActivity() {
                     onInstall = { ready -> installUpdate(ready.release, ready.apk) },
                     onDismiss = { updateState = UpdateState.Idle },
                 ),
+                exports = exportState,
                 onLoadSample = { loadBundledSample() },
-                onOpenUri = { uri -> openPicked(uri) },
+                onOpenUris = { uris -> openPicked(uris) },
                 onBack = { state = LoadState.Empty },
-                onExport = { slate -> shareSlate(slate) },
-                onSaveToGallery = { slate, title -> saveToGallery(slate, title) },
+                onExport = { request -> shareSlates(request) },
+                onSaveToGallery = { request -> saveToGallery(request) },
             )
         }
 
@@ -79,7 +103,7 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Take a dive log from whatever an incoming intent happens to carry.
+     * Take every dive log an incoming intent happens to carry.
      *
      * Deliberately exhaustive rather than assuming EXTRA_STREAM. There is no
      * one way to share a document on Android: the payload may be a stream
@@ -87,6 +111,11 @@ class MainActivity : ComponentActivity() {
      * inlined in EXTRA_TEXT. Subsurface's export is not documented and an
      * earlier version of this method handled only the first of those, which
      * made picking Dive Slate in the export chooser do nothing at all.
+     *
+     * Every file that parses is kept, rather than the first one. Sharing four
+     * logbooks and being shown the contents of one — with nothing to say the
+     * other three were dropped — is the same class of silent failure as the
+     * missing ClipData was, just further along.
      *
      * And nothing here returns quietly. A share that arrives and produces no
      * visible result is the worst outcome — indistinguishable from a crash,
@@ -117,37 +146,55 @@ class MainActivity : ComponentActivity() {
         // text attempt — which fails with a bare "unrecognised format" — mask
         // the detailed reason the actual file could not be read.
         val attempts = mutableListOf<String>()
+        val logs = mutableListOf<DiveLog>()
 
         for (uri in uris) {
             try {
-                state = LoadState.Loaded(readLog(uri))
-                return
+                logs += readLog(uri)
             } catch (e: Exception) {
                 attempts += "• file ${uri.scheme}:…/${uri.lastPathSegment ?: "?"}\n${describe(e)}"
             }
         }
 
-        // Some apps inline the document instead of handing over a file.
-        val inlined = intent.getStringExtra(Intent.EXTRA_TEXT)
-            ?: intent.clipData
-                ?.takeIf { it.itemCount > 0 }
-                ?.getItemAt(0)
-                ?.text
-                ?.toString()
-        if (!inlined.isNullOrBlank()) {
-            try {
-                state = LoadState.Loaded(parseText(inlined, source = "shared text"))
-                return
-            } catch (e: Exception) {
-                attempts += "• inline text, ${inlined.length} chars\n" +
-                    "${describe(e)}\nstarts with: ${inlined.take(120)}"
+        // Some apps inline the document instead of handing over a file. Only
+        // consulted when no file was readable: a share carrying both is
+        // carrying one document twice, and loading it twice would put the same
+        // dives in the list under two headings.
+        if (logs.isEmpty()) {
+            val inlined = intent.getStringExtra(Intent.EXTRA_TEXT)
+                ?: intent.clipData
+                    ?.takeIf { it.itemCount > 0 }
+                    ?.getItemAt(0)
+                    ?.text
+                    ?.toString()
+            if (!inlined.isNullOrBlank()) {
+                try {
+                    logs += parseText(inlined, source = "shared text")
+                } catch (e: Exception) {
+                    attempts += "• inline text, ${inlined.length} chars\n" +
+                        "${describe(e)}\nstarts with: ${inlined.take(120)}"
+                }
             }
         }
 
-        state = LoadState.Failed(
-            if (attempts.isEmpty()) describeShare(intent, uris)
-            else attempts.joinToString("\n\n")
-        )
+        state = when {
+            logs.isEmpty() -> LoadState.Failed(
+                if (attempts.isEmpty()) describeShare(intent, uris)
+                else attempts.joinToString("\n\n")
+            )
+            // Partly readable. The detail of each failure is too long for a
+            // snackbar, but the count is the part that cannot be inferred from
+            // the screen — a list of three files when four were shared looks
+            // entirely normal.
+            attempts.isNotEmpty() -> LoadState.Loaded(
+                logs,
+                Notice(
+                    "Opened ${logs.size} of ${logs.size + attempts.size} files — " +
+                        "the rest could not be read"
+                ),
+            )
+            else -> LoadState.Loaded(logs)
+        }
     }
 
     /**
@@ -197,7 +244,7 @@ class MainActivity : ComponentActivity() {
         val text = contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() }
             ?: throw ParseException("could not open the shared file")
 
-        val name = uri.lastPathSegment?.substringAfterLast('/')
+        val name = displayName(uri)
         File(filesDir, "logs").mkdirs()
         val saved = File(filesDir, "logs/${System.currentTimeMillis()}-${name ?: "log.ssrf"}")
         runCatching { saved.writeText(text) }
@@ -237,25 +284,70 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Open a log the user picked out of their files.
+     * What to call the file behind a content URI.
+     *
+     * Asked of the provider rather than read off the URI. The last path segment
+     * is a document id — Downloads hands over `msf:44` — and using it named the
+     * file headings in the dive list after the provider's internal numbering,
+     * which tells the user nothing about which logbook they are looking at. It
+     * also fed the format hint, so a real `.ssrf` extension was being thrown
+     * away before detection ever saw it.
+     *
+     * The URI is still the fallback, because a provider is not obliged to
+     * answer and a name is a nicety: everything downstream of this already
+     * copes with having none.
+     */
+    private fun displayName(uri: Uri): String? {
+        val queried = runCatching {
+            contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+                ?.use { cursor ->
+                    val column = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (column >= 0 && cursor.moveToFirst()) cursor.getString(column) else null
+                }
+        }.getOrNull()
+        return queried?.takeIf { it.isNotBlank() }
+            ?: uri.lastPathSegment?.substringAfterLast('/')
+    }
+
+    /**
+     * Open logs the user picked out of their files.
      *
      * Same path as a share: read now, keep our own copy, sniff the content. The
      * picker offers every file type because a Subsurface export has no MIME type
      * of its own — filtering would hide the very files this is for — so anything
      * can arrive here and being refused clearly is part of the job.
+     *
+     * Several files at once, because a logbook split by year or by trip is a
+     * normal thing to have and picking them one at a time would mean losing the
+     * previous one each time.
      */
-    private fun openPicked(uri: Uri) {
-        state = try {
-            LoadState.Loaded(readLog(uri))
-        } catch (e: Exception) {
-            LoadState.Failed(describe(e))
+    private fun openPicked(uris: List<Uri>) {
+        if (uris.isEmpty()) return
+
+        val logs = mutableListOf<DiveLog>()
+        val problems = mutableListOf<String>()
+        for (uri in uris) {
+            try {
+                logs += readLog(uri)
+            } catch (e: Exception) {
+                problems += describe(e)
+            }
+        }
+
+        state = when {
+            logs.isEmpty() -> LoadState.Failed(problems.joinToString("\n\n"))
+            problems.isEmpty() -> LoadState.Loaded(logs)
+            else -> LoadState.Loaded(
+                logs,
+                Notice("Opened ${logs.size} of ${uris.size} files — the rest could not be read"),
+            )
         }
     }
 
     private fun loadBundledSample() {
         state = try {
             val text = assets.open("sample.ssrf").use { it.readBytes().decodeToString() }
-            LoadState.Loaded(parseText(text, hint = "sample.ssrf", source = "sample.ssrf"))
+            LoadState.Loaded(listOf(parseText(text, hint = "sample.ssrf", source = "sample.ssrf")))
         } catch (e: Exception) {
             LoadState.Failed(describe(e))
         }
@@ -267,22 +359,169 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Save the slate to the gallery as a transparent PNG.
+     * Draw every dive in the request, at export density.
+     *
+     * Rendering is done here rather than in the editor so that it lands on the
+     * background thread with the rasterising. A dive that will not render is
+     * recorded and skipped rather than aborting the batch: nineteen slates and
+     * a note about the twentieth is a better outcome than nothing at all, and
+     * the alternative — stopping — would make one odd dive in a long selection
+     * cost the whole export.
+     */
+    private fun slatesFor(request: ExportRequest): Pair<List<SlateExport>, List<String>> {
+        val names = SlateFiles.exportNames(request.dives)
+        val exports = mutableListOf<SlateExport>()
+        val problems = mutableListOf<String>()
+        for ((i, dive) in request.dives.withIndex()) {
+            try {
+                exports += SlateExport(
+                    renderOverlay(dive, request.options),
+                    SlateFiles.EXPORT_SCALE,
+                    names[i],
+                )
+            } catch (e: Exception) {
+                problems += "${dive.title}: ${e.message ?: e::class.simpleName}"
+            }
+        }
+        return exports to problems
+    }
+
+    /**
+     * The first thing that went wrong, and how much else did.
+     *
+     * Only the leading reason is quoted. A batch usually fails for one reason —
+     * the same missing figure, the same full disk — so listing twenty variants
+     * of it in a snackbar buries the count, which is the part that cannot be
+     * read off the screen.
+     */
+    private fun firstProblem(problems: List<String>): String =
+        problems.first() + if (problems.size > 1) " (and ${problems.size - 1} more)" else ""
+
+    /**
+     * Save the slates to the gallery as transparent PNGs.
      *
      * Separate from the share path on purpose: the gallery is where the PNG
      * stays put, and wanting it there rather than immediately handing it to
      * another app is a normal thing to want.
+     *
+     * All of it on a background thread, and one slate at a time. At export
+     * density a single bitmap is tens of megabytes and takes a visible moment
+     * to compress; this used to run inline on the click, which was a stutter
+     * for one dive and would be an ANR for twenty.
      */
-    private fun saveToGallery(export: SlateExport, title: String) {
-        state = try {
-            SlateFiles.saveToGallery(this, export, title)
+    private fun saveToGallery(request: ExportRequest) {
+        if (exportState is ExportState.Running) return
+        val total = request.dives.size
+        exportState = ExportState.Running("Saving", 0, total)
+
+        lifecycleScope.launch {
+            val (saved, problems) = withContext(Dispatchers.IO) {
+                val (exports, rendering) = slatesFor(request)
+                val failures = rendering.toMutableList()
+                var written = 0
+                for ((i, export) in exports.withIndex()) {
+                    exportState = ExportState.Running("Saving", i, total)
+                    try {
+                        SlateFiles.saveToGallery(this@MainActivity, export)
+                        written++
+                    } catch (e: Exception) {
+                        failures += "${export.name}: ${e.message ?: e::class.simpleName}"
+                    }
+                }
+                written to failures.toList()
+            }
+            exportState = ExportState.Idle
             // Confirmed explicitly. Writing through MediaStore is silent and the
-            // file lands in an album the user is not looking at, so without this
+            // files land in an album the user is not looking at, so without this
             // a successful save is indistinguishable from a button that did
             // nothing.
-            state.withMessage("Saved to Pictures › Dive Slate")
-        } catch (e: Exception) {
-            state.withMessage("Could not save: ${e.message ?: e::class.simpleName}")
+            val where = "Pictures › Dive Slate"
+            state = state.withMessage(
+                when {
+                    problems.isNotEmpty() ->
+                        "Saved $saved of $total to $where. ${firstProblem(problems)}"
+                    total == 1 -> "Saved to $where"
+                    else -> "Saved $saved slates to $where"
+                }
+            )
+        }
+    }
+
+    /**
+     * Hand the slates to the system share sheet.
+     *
+     * Deliberately not addressed to any one app. This used to fire Instagram's
+     * `ADD_TO_STORY` directly, which made the button a bet on which app the
+     * user wanted — and it silently degraded to a chooser anyway whenever
+     * Instagram was absent. A transparent PNG is useful in a video editor, a
+     * message, or a notes app, and the chooser is what lets the user say so.
+     *
+     * The URIs travel in an extra, and extras are *not* walked by the automatic
+     * grant that `addFlags` performs on an intent's data. Putting them in
+     * [Intent.setClipData] as well is what actually carries the read permission
+     * to whichever app the user picks; without it the receiver gets URIs it is
+     * not allowed to open, which fails at the far end where it cannot be
+     * diagnosed. Every URI goes in, not just the first — a batch where only the
+     * leading image opens would fail in exactly that undiagnosable way.
+     */
+    private fun shareSlates(request: ExportRequest) {
+        if (exportState is ExportState.Running) return
+        val total = request.dives.size
+        exportState = ExportState.Running("Preparing", 0, total)
+
+        lifecycleScope.launch {
+            val (uris, problems) = withContext(Dispatchers.IO) {
+                val (exports, rendering) = slatesFor(request)
+                val failures = rendering.toMutableList()
+                SlateFiles.clearSlateCache(this@MainActivity)
+                val written = mutableListOf<Uri>()
+                for ((i, export) in exports.withIndex()) {
+                    exportState = ExportState.Running("Preparing", i, total)
+                    try {
+                        written += SlateFiles.writePng(this@MainActivity, export)
+                    } catch (e: Exception) {
+                        failures += "${export.name}: ${e.message ?: e::class.simpleName}"
+                    }
+                }
+                written.toList() to failures.toList()
+            }
+            exportState = ExportState.Idle
+
+            if (uris.isEmpty()) {
+                state = state.withMessage(
+                    "Could not prepare the slate: ${problems.firstOrNull() ?: "no slate was drawn"}"
+                )
+                return@launch
+            }
+            if (problems.isNotEmpty()) {
+                state = state.withMessage(
+                    "Sharing ${uris.size} of $total. ${firstProblem(problems)}"
+                )
+            }
+            startActivity(Intent.createChooser(shareIntent(uris), "Share slate"))
+        }
+    }
+
+    /**
+     * One image or several, in the form each case expects.
+     *
+     * `ACTION_SEND` for a single slate rather than a one-item `SEND_MULTIPLE`:
+     * plenty of receivers handle only the former, and a batch of one is the
+     * ordinary case this app was built for.
+     */
+    private fun shareIntent(uris: List<Uri>): Intent {
+        val intent = if (uris.size == 1) {
+            Intent(Intent.ACTION_SEND).putExtra(Intent.EXTRA_STREAM, uris[0])
+        } else {
+            Intent(Intent.ACTION_SEND_MULTIPLE)
+                .putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(uris))
+        }
+        val clip = ClipData.newUri(contentResolver, "Dive slate", uris[0])
+        for (extra in uris.drop(1)) clip.addItem(ClipData.Item(extra))
+        return intent.apply {
+            type = "image/png"
+            clipData = clip
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
     }
 
@@ -329,7 +568,8 @@ class MainActivity : ComponentActivity() {
      *
      * The progress figure is updated from the download thread and read by
      * Compose; that is safe because it only ever writes [updateState], and a
-     * dropped intermediate value costs a repaint of a progress bar.
+     * dropped intermediate value costs a repaint of a progress bar. The export
+     * progress above works the same way and for the same reason.
      */
     private fun downloadUpdate(release: UpdateCheck.Release) {
         updateState = UpdateState.Downloading(release, 0f)
@@ -396,39 +636,5 @@ class MainActivity : ComponentActivity() {
                     "Android would not open the installer: ${e.message ?: e::class.simpleName}",
                 )
             }
-    }
-
-    /**
-     * Hand the slate to the system share sheet.
-     *
-     * Deliberately not addressed to any one app. This used to fire Instagram's
-     * `ADD_TO_STORY` directly, which made the button a bet on which app the
-     * user wanted — and it silently degraded to a chooser anyway whenever
-     * Instagram was absent. A transparent PNG is useful in a video editor, a
-     * message, or a notes app, and the chooser is what lets the user say so.
-     *
-     * The URI travels in an extra, and extras are *not* walked by the automatic
-     * grant that `addFlags` performs on an intent's data. Putting it in
-     * [Intent.setClipData] as well is what actually carries the read permission
-     * to whichever app the user picks; without it the receiver gets a URI it is
-     * not allowed to open, which fails at the far end where it cannot be
-     * diagnosed.
-     */
-    private fun shareSlate(slate: SlateExport) {
-        val uri = try {
-            SlateFiles.writePng(this, slate)
-        } catch (e: Exception) {
-            state = state.withMessage("could not save the slate: ${e.message}")
-            return
-        }
-
-        val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "image/png"
-            putExtra(Intent.EXTRA_STREAM, uri)
-            clipData = ClipData.newUri(contentResolver, "Dive slate", uri)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-
-        startActivity(Intent.createChooser(intent, "Share slate"))
     }
 }

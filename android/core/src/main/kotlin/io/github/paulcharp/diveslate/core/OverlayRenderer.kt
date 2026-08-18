@@ -142,6 +142,23 @@ private val STAT_BUILDERS: Map<String, (Dive) -> SlateStat?> = mapOf(
 val STAT_KEYS: List<String> = STAT_BUILDERS.keys.toList()
 
 /**
+ * Which figures this dive can actually supply.
+ *
+ * The same question [resolveStats] answers by dropping what it cannot build,
+ * asked ahead of the render so a caller can say so before drawing. It exists
+ * for the batch: settings chosen while previewing one dive are applied to
+ * every selected dive, and a figure the others never recorded is skipped
+ * silently — which looks exactly like the log not recording it, the thing this
+ * project refuses to let happen unwatched. Answering here lets the picker warn
+ * instead.
+ *
+ * Every builder is run, so this costs a pass over the samples for the derived
+ * figures. Fine once per selection; not something to call per frame.
+ */
+fun availableStats(dive: Dive): Set<String> =
+    STAT_BUILDERS.filterValues { it(dive) != null }.keys
+
+/**
  * The figures this slate shows, in order.
  *
  * Shared across styles on purpose: which numbers are worth printing is a fact
