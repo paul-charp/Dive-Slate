@@ -34,7 +34,7 @@ tools/         Python. Palette maths and the generators for Themes.kt.
 ## Commands
 
 ```bash
-cd android && ./gradlew core:test          # 72 tests, no device needed
+cd android && ./gradlew core:test          # 74 tests, no device needed
 cd android && ./gradlew :app:installDebug
 cd android && ./gradlew :app:assembleRelease   # signed if keystore.properties
                                                # is present, debug key if not —
@@ -694,6 +694,13 @@ were admitted by measured gates — OKLab ΔE, CVD simulation, contrast — agai
 the marks they paint. A colour derived from someone's home screen has cleared
 none of that, and letting one in would void the whole argument in
 `tools/palette.py`. Dynamic colour ends at buttons, chips and text.
+
+**The Material *style* is not an exception to this, and is easy to mistake for
+one.** It draws a tonal card with M3's roles, and it does that from seeds fixed
+at design time and measured like every other palette — see
+[The nine styles](#the-nine-styles-and-what-a-style-may-trade). Regenerating it
+from the wallpaper is the obvious next step and the one to refuse: the chrome
+around the slate may follow the phone, and the drawing may not.
 
 Two smaller things that were got wrong once each:
 
