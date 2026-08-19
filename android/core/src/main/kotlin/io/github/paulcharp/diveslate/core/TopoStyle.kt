@@ -166,12 +166,13 @@ object TopoStyle : SlateStyle {
         )
 
         // ---- profile -------------------------------------------------------
-        val points = profilePoints(dive, frame)
+        val points = profileTrace(dive, frame, options)
         ops.add(
             SlateOp.Path(
                 points = closedToSurface(points, frame.plotTop),
                 closed = true,
                 fill = SlateFill.Solid(theme.curveFillTop),
+                smooth = options.smoothProfile,
             )
         )
         // Hachures: three echoes below the line, fading, in the paper's brown.
@@ -187,6 +188,7 @@ object TopoStyle : SlateStyle {
                     closed = false,
                     strokeArgb = withAlpha(theme.ornament, alpha),
                     strokeWidth = m.px(1.8f),
+                    smooth = options.smoothProfile,
                 )
             )
         }
@@ -203,6 +205,7 @@ object TopoStyle : SlateStyle {
             SlateOp.Path(
                 points = points, closed = false,
                 strokeArgb = theme.curve, strokeWidth = m.px(4f),
+                smooth = options.smoothProfile,
             )
         )
         if (options.showGas) ops.addAll(gasOps(dive, frame, theme, SlateFont.SANS))

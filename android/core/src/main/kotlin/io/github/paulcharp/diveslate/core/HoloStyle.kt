@@ -159,12 +159,13 @@ object HoloStyle : SlateStyle {
                 argb = theme.axis, strokeWidth = m.px(2f),
             )
         )
-        val points = profilePoints(dive, frame)
+        val points = profileTrace(dive, frame, options)
         ops.add(
             SlateOp.Path(
                 points = closedToSurface(points, frame.plotTop),
                 closed = true,
                 fill = SlateFill.Vertical(theme.curveFillTop, theme.curveFillBottom),
+                smooth = options.smoothProfile,
             )
         )
         if (options.showCeiling) {
@@ -181,6 +182,7 @@ object HoloStyle : SlateStyle {
                 points = points, closed = false,
                 strokeArgb = theme.curve, strokeWidth = m.px(3.5f),
                 glowRadius = m.px(9f),
+                smooth = options.smoothProfile,
             )
         )
         if (options.showGas) ops.addAll(gasOps(dive, frame, theme, SlateFont.MEDIUM))

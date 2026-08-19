@@ -26,6 +26,12 @@ object RetroStyle : SlateStyle {
 
     override val id: String = "retro"
 
+    // The one style whose profile is not smoothed, and it needs no flag to say
+    // so: the segment screen resamples to one minute and one metre and draws
+    // its own steps, so it never goes through profileTrace at all. That
+    // quantisation *is* the style — a curve through a staircase is a staircase
+    // with rounded corners, which reads as neither.
+
     override val label: String = "Dive computer"
 
     override val description: String = "A stepped trace on a segment screen."

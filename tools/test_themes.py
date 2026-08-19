@@ -122,38 +122,6 @@ def test_every_palette_clears_its_own_profile() -> None:
         )
 
 
-def test_container_pairs_clear_the_text_bar() -> None:
-    """A chip's label must be legible on the chip, not merely on the card.
-
-    A style that fills a shape and prints inside it has changed what its ink is
-    read against, and the palette's ordinary ink is no answer: in a dark scheme
-    it is pale, and so is a filled container. The pairs are stated together for
-    that reason, and this is the check that they were stated correctly.
-
-    Only palettes that declare containers are examined. The rest are given
-    defined fallbacks so no style has to test for their absence, and holding a
-    fallback to a bar it was never designed for would fail the wrong thing.
-    """
-    from palette import contrast
-    from theme import STYLE_THEMES
-
-    for style, family in STYLE_THEMES.items():
-        for candidate in family:
-            if candidate.container_primary is None:
-                continue
-            for role in ("primary", "neutral", "accent", "hazard"):
-                background = getattr(candidate, f"container_{role}")
-                foreground = getattr(candidate, f"on_container_{role}")
-                assert background is not None and foreground is not None, (
-                    f"{candidate.name} declares some containers but not {role}"
-                )
-                ratio = contrast(foreground, background)
-                assert ratio >= 4.5, (
-                    f"{style}/{candidate.name}: {role} chip text measures "
-                    f"{ratio:.2f}:1 on its own fill"
-                )
-
-
 def test_gas_accent_stands_off_the_panel() -> None:
     """The one mark that carries a label must be visible against its label.
 

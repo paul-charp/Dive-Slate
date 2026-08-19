@@ -27,7 +27,7 @@ from typing import Any
 import theme as theme_mod
 from _console import use_utf8_stdout
 from palette import contrast, validate
-from theme import CEILING, STYLE_THEMES, THEMES, Theme, _rgba_of, build_theme
+from theme import CEILING, STYLE_THEMES, THEMES, Theme, build_theme
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -157,19 +157,6 @@ def theme_json(theme: Theme) -> dict[str, Any]:
         "surface_edge": theme.surface_edge or "rgba(0,0,0,0)",
         "ornament": theme.ornament or theme.accent,
         "curve_end": theme.curve_end or theme.curve,
-        # A palette that declares no containers still gets defined values, so no
-        # style has to test for their absence. They are the nearest honest thing
-        # the palette already holds — a style that actually wants to fill shapes
-        # should declare the pairs and have the contrast checked, rather than
-        # inheriting these.
-        "container_primary": theme.container_primary or theme.curve_fill_top,
-        "on_container_primary": theme.on_container_primary or theme.ink,
-        "container_neutral": theme.container_neutral or theme.grid,
-        "on_container_neutral": theme.on_container_neutral or theme.ink,
-        "container_accent": theme.container_accent or _rgba_of(theme.accent, 0.25),
-        "on_container_accent": theme.on_container_accent or theme.ink,
-        "container_hazard": theme.container_hazard or _rgba_of(theme.ceiling, 0.25),
-        "on_container_hazard": theme.on_container_hazard or theme.ink,
     }
 
     return {

@@ -71,7 +71,7 @@ Python, after any palette change:
 uv sync
 uv run python tools/export_theme_tokens.py     # palettes + slider ranges
 uv run python tools/generate_kotlin_themes.py  # -> android/.../Themes.kt
-uv run pytest                                  # 10: 8 that the baked tokens match
+uv run pytest                                  # 9: 7 that the baked tokens match
                                                # the maths, 2 that the release
                                                # manifest matches the app
 uv run ruff check . && uv run ruff format .    # line length 88
@@ -88,15 +88,15 @@ android/core/
   Models.kt           Dive, Sample, GasMix, Cylinder, GasSwitch, DiveLog
   SubsurfaceParser.kt  UddfParser.kt  Detect.kt (content sniffing)
   Xml.kt              DOM wrapper; refuses any document declaring a DOCTYPE
-  Themes.kt           generated — 32 palettes as constants, do not hand-edit
+  Themes.kt           generated — 24 palettes as constants, do not hand-edit
   Slate.kt            the display list core emits
   SlateStyle.kt       the three axes: SlateLayout + LayoutMetrics, SlateStyle
   StyleKit.kt         what the styles share *underneath* the drawing: the frame,
                       the profile, the stepped ceiling, figure typesetting
   ModernStyle.kt      the default style — the drawing itself
   WrappedStyle.kt StickerStyle.kt MagazineStyle.kt FrostedStyle.kt
-  HoloStyle.kt RetroStyle.kt TopoStyle.kt MaterialStyle.kt
-                      eight more, one file each
+  HoloStyle.kt RetroStyle.kt TopoStyle.kt
+                      seven more, one file each
   OverlayRenderer.kt  what the styles share: options, stats, envelope, entry point
 
 android/app/
@@ -114,7 +114,7 @@ tools/
                       then STYLE_THEMES — one palette family per style
   export_theme_tokens.py, generate_kotlin_themes.py
   _console.py         UTF-8 stdout, so a summary cannot fail a generation
-  test_themes.py      the eight tests that guard the generated tokens
+  test_themes.py      the seven tests that guard the generated tokens
   test_release_contract.py  the workflow and UpdateCheck.kt agree on update.json
 
 docs/RELEASING.md     the keystore, the secrets, and what each refusal protects
@@ -189,22 +189,24 @@ structural rather than tidy. `adopt` keeps the mode across a style change becaus
 the mode is a statement about the footage; a style with no light palette would
 quietly drop that statement on the way in.
 
-## The nine styles, and what a style may trade
+## The eight styles, and what a style may trade
 
-Eight styles were added to Modern from a set of mockups. They differ in ornament
-and palette far more than in arrangement — the page is still a heading, a
-profile and some figures, which is why they are styles rather than layouts.
+Seven styles were added to Modern from a set of mockups. (There were eight: a
+Material 3 one, a tonal card with its figures in chips, removed at the user's
+request along with its eight seeded palettes and the `figureScale` lever it
+introduced.) They differ in ornament and palette far more than in arrangement —
+the page is still a heading, a profile and some figures, which is why they are
+styles rather than layouts.
 
 ```
 modern    flat and geometric, the default            chromatic  9 palettes
-wrapped   one loud opaque card, sparkles             expressive 2
+wrapped   one loud opaque card, no ornament          expressive 2
 sticker   rounded, ringed, a ramped line             expressive 2
 magazine  masthead rules, condensed figures, no card monochrome 2
 frosted   two-stop glass with a lit edge             monochrome 2
 holo      cut-corner panel, dot field, lit trace     expressive 2
 retro     bezel, segment screen, stepped trace       monochrome 3
 topo      grained paper, labelled grid, hachures     expressive 2
-material  header row, wavy rule, figures in chips    expressive 8
 ```
 
 What a style is free to change, and what it is not, is the part worth keeping:
@@ -259,16 +261,24 @@ What a style is free to change, and what it is not, is the part worth keeping:
   it. Anything the style places against the right edge measures what is already
   there rather than reserving a fraction of the width — a fraction is a guess
   that survives Wide and collides at Watch.
-* **A style that puts figures in containers charges the padding to the figure,
-  not to the badge.** `SlateFrame.of` takes a `figureScale` for exactly that, and
-  it is the one sanctioned exception to a style keeping its hands off the type
-  scale. The layout's sizes were chosen for bare numerals — the watch badge sets
-  88px figures precisely *because* nothing surrounds them — so a container that
-  adds its padding on top produces two panels with a sparkline wedged
-  underneath. Material sets 0.58 when stacked. Sizing those chips to their
-  *content* instead was tried and reverted: it fixed nothing the scale had not
-  already fixed, and left a narrow column of pills against half a badge of empty
-  card.
+* **A style whose ornament does not fit shrinks the ornament, not the figures.**
+  `SlateFrame.of` used to take a `figureScale` so a style drawing each figure in
+  a container could charge the padding to the figure. Both are gone with the
+  style that used them, and the lever is not being kept for the next one,
+  because it was the wrong one: the layout's sizes are a promise — the watch
+  badge sets 88px numerals *because* it stacks them — and a style that scales
+  them down to pay for its own decoration breaks that promise silently. It did:
+  a badge a third of Wide's width ended up with numerals smaller than Wide's,
+  and smaller than Compact's on a *larger* badge. The smallest slate set the
+  smallest numbers.
+
+  **Guard emitted marks, not quoted metrics.** Every metric-level test passed
+  through all of that, because no metric had moved — the guard asked
+  `SlateLayout` what it quoted, not the style what it drew. `SlateStyleTest` now
+  renders the cross-product and compares the largest text each style actually
+  emits. Both tests are kept; they answer different questions, and only the new
+  one can see a style undercutting its layout.
+
 * **A box is sized with `boxedAdvance`, and its text is centred in it.** Core
   estimates text width from character count and never measures, so the estimate
   is sometimes short. Short for a bare label costs a few pixels nobody notices;
@@ -297,25 +307,19 @@ What a style is free to change, and what it is not, is the part worth keeping:
   the `m` after a depth landed six pixels into it — worse the larger the figure,
   which is why it showed first on the style that sets figures biggest.
 
-**The Material style is seeded, never sampled.** Material's other half is
-dynamic colour, where the scheme regenerates from the user's wallpaper, and that
-must not arrive here: a hue off someone's home screen has cleared none of the
-gates, and letting one in would void the whole argument in `tools/palette.py`.
-The scheme is computed at design time from a fixed seed, in OKLCH rather than
-HCT, and then measured like every other palette — Material's method for the
-surfaces, this project's measurement for anything that has to be told apart from
-another mark. Its tertiary role is the example: 60° off an ocean seed lands on
-indigo, ΔE 5.0 against the primary under deuteranopia, so that role is searched
-instead of placed by rule.
+**Every style but the segment screen draws a smoothed curve, and the curve may
+not overshoot.** `OverlayOptions.smoothProfile` is **on by default** — a dive
+profile is a curve in the water and the polyline is the sampling artefact, so
+the curve is the truer of the two pictures. It stays a control because a reader
+after every tooth of a sawtooth bottom wants the teeth, not a line through them.
+Retro is the one style that cannot honour it: the segment screen quantises to
+one minute and one metre, and a curve through a staircase is a staircase with
+rounded corners. The UI reads `SlateStyle.supportsSmooth` rather than naming the
+style, and *hides* the chip instead of greying it — a control that does nothing
+when pressed is worse than one never offered, the same rule the dive list
+applies to a row it cannot draw.
 
-**The Material card has no divider.** M3 Expressive's wavy rule sat directly
-above the plot, and there it did not read as a divider at all — it read as a
-second, wobbling surface line a few pixels above the real one, on the one style
-whose water is a flat block with a crisp top edge. A rule that competes with an
-axis is worse than no rule.
-
-**Material's profile is the only curved one, and the curve may not overshoot.**
-It is drawn through a coarser series — a spline through points a pixel apart is a
+The smoothed profile is drawn through a coarser series — a spline through points a pixel apart is a
 polyline with extra arithmetic — using flat tangents, so each segment leaves one
 point horizontally and arrives at the next horizontally and the line stays inside
 the two depths it joins. A nicer-looking spline (Catmull-Rom) overshoots, which
@@ -323,6 +327,24 @@ here would draw the profile deeper than the deepest sample and put the picture a
 odds with the figure beside it. Smoothing may change how the line travels between
 two depths; it may not invent a third. The coarsening keeps each bucket's
 shallowest *and* deepest sample for the same reason, and a test holds it.
+
+Coarsening and smoothing go together, which is why `profileTrace` does both:
+coarsening without smoothing is just a worse polyline, and smoothing without
+coarsening is arithmetic nobody can see. `ModernStyle` maps its samples with
+closures of its own and so reduces by hand — but at the shared `SMOOTH_STEP_PX`,
+because a second copy of that number is how the default style ends up smoothing
+differently from the other seven.
+
+**`SMOOTH_STEP_PX` is free to be tuned for looks, and that is a property of
+`coarsened` rather than a licence.** It went 34 → 64 when 34 turned out to be
+merely enough to make the line legal as a curve rather than enough to make it
+look like one. Moving it is safe *only* because every bucket keeps both
+extremes: a coarser step changes how much wobble survives and never where the
+deepest point is, so the profile cannot drift away from the figure printed
+beside it. Were the reduction an average or a first-sample rule, this constant
+would be a depth error waiting for someone to tune it — which is exactly the
+trap the segment screen's resampling fell into, where a coarser grid *did* move
+the deepest drawn point while the figure still read 45 m.
 
 Two places where a style touches the data, both deliberate and both narrow:
 
@@ -375,6 +397,19 @@ twenty. Rendering happens there too: `ExportRequest` carries *dives*, not
 slates, so building the display lists lands on the background thread rather than
 blocking the click that started it. Parallelising is the thing to refuse — four
 threads means four live bitmaps, and the fourth is an OutOfMemoryError.
+
+**A non-empty selection implies selection mode, and the list breaks in a
+particular way when it does not.** The two are separate state, and the list
+reads them in different places: the row tint follows the *selection*, while the
+top bar, the dots and the action bar follow the *mode*. So clearing one without
+the other does not produce a clean "nothing is selected" — it produces rows that
+are visibly highlighted with no control anywhere admitting it, and a selection
+that reappears intact the next time the user taps Select, seemingly from
+nowhere. Opening a batch used to do exactly that. It no longer clears the mode:
+opening the editor is not leaving the selection, the selection is *what the
+editor is editing*, so backing out lands on the list exactly as it was left.
+That also makes the back chain the three steps it always claimed to be — editor,
+selection, list, start — instead of collapsing two of them on the way in.
 
 **Names are deduplicated in `SlateFiles.exportNames`, not by MediaStore.** One
 timestamp per batch, then dive number and site, so a batch sorts together in the
@@ -685,9 +720,24 @@ the fixtures still encode its behaviour, so these remain worth recording.
 ## The chrome is Material You; the slate is not
 
 The app's own surfaces take a dynamic colour scheme from the wallpaper on
-Android 12+, with a fixed blue scheme below that. It is always dark, and not as
-a preference: every screen is chrome around a transparent slate on a
-checkerboard, and a light shell competes with the thing being judged.
+Android 12+, with a fixed blue scheme below that, and **follow the system
+light/dark setting**.
+
+That last part was the other way round for a long time — pinned dark, on the
+argument that every screen is chrome around a transparent slate and a light
+shell competes with the thing being judged. What makes following the phone safe
+is that **the checkerboard does not follow it.** The backdrop behind the preview
+is the stand-in for the footage, so it stays mid-grey in both modes: the slate is
+judged against the same surface either way, and only the frame around it moves.
+Had the checkerboard gone pale on a light phone, a light palette would have
+looked right there and wrong on the video, which is exactly the confusion the
+pinning was protecting against. It is not protecting anything now, so the
+setting is honoured.
+
+The mode of the *app* and the dark/light mode of the *slate* are unrelated and
+must stay that way. The slate's is a statement about the footage it will land
+on; the phone's is a statement about the phone. Deriving one from the other
+would guess at footage nobody has described.
 
 **A wallpaper colour must never reach the drawing.** The palettes in `Themes.kt`
 were admitted by measured gates — OKLab ΔE, CVD simulation, contrast — against
@@ -695,19 +745,27 @@ the marks they paint. A colour derived from someone's home screen has cleared
 none of that, and letting one in would void the whole argument in
 `tools/palette.py`. Dynamic colour ends at buttons, chips and text.
 
-**The Material *style* is not an exception to this, and is easy to mistake for
-one.** It draws a tonal card with M3's roles, and it does that from seeds fixed
-at design time and measured like every other palette — see
-[The nine styles](#the-nine-styles-and-what-a-style-may-trade). Regenerating it
-from the wallpaper is the obvious next step and the one to refuse: the chrome
-around the slate may follow the phone, and the drawing may not.
+There was a Material 3 *style* that looked like an exception to this and was
+not: it drew a tonal card with M3's roles, but from seeds fixed at design time
+and measured like every other palette. It has been removed. The rule it was
+tempting is worth keeping in mind if anything like it returns — regenerating a
+slate's palette from the wallpaper is the obvious next step and the one to
+refuse. The chrome around the slate may follow the phone; the drawing may not.
 
 Two smaller things that were got wrong once each:
 
-- **`enableEdgeToEdge` needs both bar styles pinned to `dark`.** Left on auto it
-  picks icon colour from the *system* light/dark setting, and this app is dark
-  whichever way the phone is set — on a light-themed phone that produced a dark
-  clock on a near-black bar.
+- **`enableEdgeToEdge`'s bar styles and the app's own mode are one decision.**
+  Auto picks icon colour from the *system* light/dark setting, so it is right
+  now and was wrong while the app was pinned dark — on a light-themed phone that
+  produced a dark clock on a near-black bar. Change one and change the other.
+- **The launch window background is four files, not one.** `values/themes.xml`
+  and `values-night/`, plus `values-v31/` and `values-night-v31/` because from
+  API 31 the splash needs `windowSplashScreenBackground` set as well and does
+  not fall back to `windowBackground`. Both qualifiers have to be on one folder:
+  `values-night` alone loses to `values-v31` on an Android 12+ phone in dark
+  mode. Keep the four in step with `background` in the fallback schemes, or the
+  cold-start flash is the wrong colour for whichever half of the users the stale
+  value is wrong for.
 - **Insets are taken per screen, not by the root.** A `safeDrawingPadding` on the
   outermost Box stops the contextual selection bar short of the status bar,
   which reads as a floating strip rather than as the top of the screen.

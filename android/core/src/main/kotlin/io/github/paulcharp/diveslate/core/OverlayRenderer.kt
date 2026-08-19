@@ -46,6 +46,31 @@ data class OverlayOptions(
     /** Gas-switch markers and mix labels on the curve itself. */
     val showGas: Boolean = false,
     /**
+     * Draw the profile as a flowing curve rather than as a polyline.
+     *
+     * On by default. A dive profile is a curve in the water and the polyline is
+     * the sampling artefact, so the curve is the truer picture of the two — but
+     * it stays a choice, because a reader looking for the shape of a sawtooth
+     * bottom wants every tooth and not a line through them.
+     *
+     * Smoothing is allowed to change how the line *travels* between two depths.
+     * It is not allowed to invent a third: the tangents are flat, so a segment
+     * leaves one sample horizontally and arrives at the next horizontally and
+     * stays inside the two depths it joins. A nicer-looking spline overshoots,
+     * which here would draw the dive deeper than its deepest sample and put the
+     * picture at odds with the figure printed beside it.
+     *
+     * The coarsening a curve wants is the other half, and it is the half that
+     * could lie: see [SMOOTH_STEP_PX]. Every bucket keeps its shallowest *and*
+     * deepest sample, so however coarse this gets, the deepest point of the dive
+     * is still on the drawing.
+     *
+     * Not every style can honour it. One that resamples the profile for its own
+     * reasons has already answered the question; see [SlateStyle.supportsSmooth],
+     * which is what stops the UI offering a control that would do nothing.
+     */
+    val smoothProfile: Boolean = true,
+    /**
      * Whether the derived deco time may take an automatic stat slot. It is an
      * inference from the ceiling rather than a figure the log states, so it is
      * worth being able to drop without hand-listing every other stat.

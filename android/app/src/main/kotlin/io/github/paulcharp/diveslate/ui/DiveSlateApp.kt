@@ -1,5 +1,6 @@
 package io.github.paulcharp.diveslate.ui
 
+import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.BackHandler
@@ -22,6 +23,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.aspectRatio
@@ -37,10 +39,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -49,12 +53,16 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -69,6 +77,8 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -92,6 +102,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.net.toUri
 import io.github.paulcharp.diveslate.BuildConfig
 import io.github.paulcharp.diveslate.ExportRequest
 import io.github.paulcharp.diveslate.SlatePainter
@@ -102,6 +113,7 @@ import io.github.paulcharp.diveslate.core.OverlayOptions
 import io.github.paulcharp.diveslate.core.SLATE_STYLES
 import io.github.paulcharp.diveslate.core.Slate
 import io.github.paulcharp.diveslate.core.SlateLayout
+import io.github.paulcharp.diveslate.core.SlateStyle
 import io.github.paulcharp.diveslate.core.SlateTheme
 import io.github.paulcharp.diveslate.core.adopt
 import io.github.paulcharp.diveslate.core.availableStats
@@ -260,31 +272,50 @@ data class Updates(
  * [io.github.paulcharp.diveslate.core.SlateTheme.scrimAlphaMin] and still binds
  * the slider. What changed is that the preview no longer shows that case, only
  * the typical one.
+ *
+ * **These two do not follow the system theme, and that is the point.** Every
+ * other colour on this screen is chrome and moves with the phone; this one is
+ * the stand-in for the footage. A checkerboard that went pale on a light phone
+ * would mean the same slate was being judged against two different backdrops
+ * depending on a setting that has nothing to do with where the image is going —
+ * and a light palette would look correct on a light phone and wrong on the
+ * video. Fixed here, the mode changes the shell and leaves the verdict alone.
  */
 private const val CHECKER_LIGHT = 0xFF5E666B
 private const val CHECKER_DARK = 0xFF4A5257
 private val CHECKER_CELL = 22.dp
 
 /**
- * Material You, always dark.
+ * Material You, following the phone.
  *
- * Dark is not a preference here, it is the job: every screen is chrome around a
- * transparent slate sitting on a checkerboard, and a light shell would compete
- * with the thing being judged. What the wallpaper is allowed to move is the
- * accent — on Android 12 and up the scheme is derived from it, so the app looks
- * like it belongs to the phone rather than to itself.
+ * This was pinned dark for a long time, on the argument that a light shell would
+ * compete with the transparent slate being judged. What made that argument
+ * survive was the checkerboard, and the checkerboard does not follow the theme —
+ * it is a stand-in for the footage, so it stays mid-grey whichever way the phone
+ * is set (see [CHECKER_LIGHT]). The slate is therefore judged against exactly
+ * the same backdrop in both modes, and the shell around it is free to be the one
+ * the user asked their phone for. An app that stays dark on a light phone is not
+ * protecting anything here; it is just ignoring a setting.
+ *
+ * What the wallpaper is allowed to move is the accent — on Android 12 and up the
+ * scheme is derived from it, so the app looks like it belongs to the phone rather
+ * than to itself.
  *
  * None of this reaches the slate. The palettes in `Themes.kt` cleared measured
  * contrast gates against the marks they paint, and a colour chosen from someone's
  * wallpaper has cleared nothing. The dynamic scheme colours buttons, chips and
- * text; the drawing keeps the palette the user picked.
+ * text; the drawing keeps the palette the user picked, in the mode the user
+ * picked — the slate's own dark/light choice is a statement about the footage and
+ * is not touched by the phone's.
  */
 @Composable
 private fun DiveSlateTheme(content: @Composable () -> Unit) {
+    val dark = isSystemInDarkTheme()
     val scheme = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        dynamicDarkColorScheme(LocalContext.current)
+        val context = LocalContext.current
+        if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
     } else {
-        FALLBACK_DARK
+        if (dark) FALLBACK_DARK else FALLBACK_LIGHT
     }
     MaterialTheme(colorScheme = scheme, content = content)
 }
@@ -312,6 +343,29 @@ private val FALLBACK_DARK = darkColorScheme(
 )
 
 /**
+ * The same blue, for a light phone on Android 11.
+ *
+ * Tonally the mirror of [FALLBACK_DARK] rather than a second design: the two are
+ * one scheme read from opposite ends, so a screenshot taken in either mode shows
+ * the same app.
+ */
+private val FALLBACK_LIGHT = lightColorScheme(
+    primary = Color(0xFF00639B),
+    onPrimary = Color(0xFFFFFFFF),
+    primaryContainer = Color(0xFFD1E4FF),
+    onPrimaryContainer = Color(0xFF001D32),
+    secondaryContainer = Color(0xFFD6E4F7),
+    onSecondaryContainer = Color(0xFF101C2B),
+    background = Color(0xFFF7FAFD),
+    onBackground = Color(0xFF191C1E),
+    surface = Color(0xFFF7FAFD),
+    onSurface = Color(0xFF191C1E),
+    surfaceVariant = Color(0xFFDDE3EA),
+    onSurfaceVariant = Color(0xFF41484D),
+    outline = Color(0xFF71787E),
+)
+
+/**
  * The three text tones, read off the scheme.
  *
  * Composable getters rather than constants, because with a dynamic scheme there
@@ -336,8 +390,16 @@ private val Muted: Color
  * from the body text. Amber rather than the deco red, which stays reserved: that
  * red is a hazard marker inside the slate, and spending it on chrome would
  * weaken what it means there.
+ *
+ * Two values rather than one, because the shell now follows the phone and the
+ * light amber that reads as a caution on a near-black surface measures under
+ * 2:1 on a near-white one — which would leave the one line the user is meant to
+ * read before acting as the faintest text on the screen. Same hue, wound down
+ * in lightness until it clears the body text going the other way.
  */
-private val Caution = Color(0xFFE8B860)
+private val Caution: Color
+    @Composable get() =
+        if (isSystemInDarkTheme()) Color(0xFFE8B860) else Color(0xFF7A5200)
 
 /**
  * Everything is offered, because a dive log has no MIME type of its own.
@@ -403,6 +465,13 @@ fun DiveSlateApp(
         // is the ordinary single-dive edit; several is a batch. Reset whenever
         // a different set of files is loaded, since the refs address those.
         var editing by remember(loaded?.logs) { mutableStateOf<List<DiveRef>>(emptyList()) }
+        // Invariant: a non-empty [selection] implies [selecting]. The list reads
+        // the two in different places — the row tint follows the selection, the
+        // top bar and the dots and the action bar follow the mode — so breaking
+        // it does not produce a clean "nothing is selected", it produces a list
+        // with rows visibly highlighted and no control anywhere that admits it.
+        // Every site that clears one clears the other; see [onOpenSelection] for
+        // the one that used to not.
         var selection by remember(loaded?.logs) { mutableStateOf<Set<DiveRef>>(emptySet()) }
         var selecting by remember(loaded?.logs) { mutableStateOf(false) }
 
@@ -458,8 +527,20 @@ fun DiveSlateApp(
                                 // the switcher steps through them the way they
                                 // were read, and the batch exports in that order
                                 // too.
+                                //
+                                // The selection is deliberately left standing.
+                                // Opening the editor is not leaving the
+                                // selection — the selection is what the editor
+                                // is editing — so back out of the editor and the
+                                // list is exactly as it was left, still ticked
+                                // and still offering to open them. Dropping the
+                                // mode here collapsed two back steps into one on
+                                // the way in and left the selection behind
+                                // invisibly on the way out: the rows kept their
+                                // highlight, while the bar said "6 dives" and
+                                // offered "Select", and tapping it brought the
+                                // three back as though from nowhere.
                                 editing = order.filter { it in selection }
-                                selecting = false
                             },
                         )
                     } else {
@@ -559,6 +640,31 @@ private fun Welcome(
                 style = MaterialTheme.typography.labelLarge,
             )
         }
+        // Under the update check, because it answers the question that one
+        // raises: there is no store page to read, so the repository is the only
+        // place saying what changed, what this reads, and what it does with it.
+        // An app that installs itself from GitHub should say which GitHub.
+        //
+        // Guarded, and quiet about it. A phone with no browser at all is not a
+        // real case, but a chooser that cannot be resolved throws, and crashing
+        // the start screen over a footer link would cost far more than the link
+        // is worth.
+        val context = LocalContext.current
+        TextButton(
+            onClick = {
+                runCatching {
+                    context.startActivity(
+                        Intent(Intent.ACTION_VIEW, UpdateCheck.PROJECT_URL.toUri())
+                    )
+                }
+            },
+        ) {
+            Text(
+                "View the project on GitHub",
+                style = MaterialTheme.typography.labelLarge,
+                color = Muted,
+            )
+        }
     }
 }
 /**
@@ -654,6 +760,17 @@ private fun UpdateBanner(updates: Updates, modifier: Modifier = Modifier) {
     }
 }
 
+/**
+ * A line of the update banner, and the one way out of it.
+ *
+ * The dismiss is a cross rather than the "Not now" it used to be. This row is
+ * shared by every state the banner has, and "Not now" only ever described one
+ * of them: against "is the latest version" it offered to postpone something
+ * that had already finished, and against "could not check" it read as declining
+ * an offer that was never made. A cross means close, in all four, and it means
+ * it without a word — which also stops the widest state of the banner from
+ * pushing its own title into two lines on a narrow phone.
+ */
 @Composable
 private fun BannerRow(title: String, detail: String? = null, onDismiss: () -> Unit) {
     Row(verticalAlignment = Alignment.Top) {
@@ -667,7 +784,19 @@ private fun BannerRow(title: String, detail: String? = null, onDismiss: () -> Un
                 )
             }
         }
-        TextButton(onClick = onDismiss) { Text("Not now") }
+        // Sized down from the 48dp default and nudged out to the edge: at full
+        // size it sat a thumb's width in from the corner and stretched the card
+        // taller than the two lines beside it.
+        IconButton(
+            onClick = onDismiss,
+            modifier = Modifier.size(32.dp).offset(x = 6.dp, y = (-2).dp),
+        ) {
+            Icon(
+                Icons.Filled.Close,
+                contentDescription = "Dismiss",
+                modifier = Modifier.size(20.dp),
+            )
+        }
     }
 }
 
@@ -1091,6 +1220,15 @@ private fun Editor(
     var showScrim by remember { mutableStateOf(true) }
     var showCeiling by remember { mutableStateOf(true) }
     var showGas by remember { mutableStateOf(false) }
+    // On by default, and it stays wherever the user leaves it.
+    //
+    // A dive profile is a curve in the water; the polyline is the sampling
+    // artefact. So the curve is the truer of the two pictures and leads, and the
+    // control is here for a reader who wants every tooth of a sawtooth bottom
+    // rather than a line through them. Carried across a style change like the
+    // palette's dark/light choice, because it is a statement about how this
+    // slate should read and the incoming style knows nothing about it.
+    var smooth by remember { mutableStateOf(true) }
     var chosenStats by remember { mutableStateOf(emptySet<String>()) }
 
     // Which of the selection is on screen. Deliberately outside every setting
@@ -1123,7 +1261,7 @@ private fun Editor(
     // screen cannot afford.
     val options = remember(
         style, layout, theme, opacity, minOpacity, showScrim, showSite, showDate,
-        showCeiling, showGas, chosenStats,
+        showCeiling, showGas, smooth, chosenStats,
     ) {
         OverlayOptions(
             style = style,
@@ -1135,6 +1273,10 @@ private fun Editor(
             showDate = showDate,
             showCeiling = showCeiling,
             showGas = showGas,
+            // Ignored by a style that cannot honour it, which is also the one
+            // that hides the control — so the flag can never disagree with what
+            // is on screen.
+            smoothProfile = smooth && style.supportsSmooth,
             stats = chosenStats.takeIf { it.isNotEmpty() }
                 ?.let { picked -> STAT_LABELS.map { it.first }.filter { it in picked } },
         )
@@ -1202,24 +1344,14 @@ private fun Editor(
         // The broadest of the three axes, so it leads: it decides how the slate
         // is drawn and therefore which palettes are even on offer below.
         Label("Style")
-        ChipRow {
-            SLATE_STYLES.forEach { candidate ->
-                FilterChip(
-                    selected = candidate.id == style.id,
-                    onClick = {
-                        style = candidate
-                        // The palette follows the style rather than resetting:
-                        // the dark/light choice is a statement about the footage
-                        // this slate will land on, which the new style knows
-                        // nothing about.
-                        theme = candidate.adopt(theme)
-                        opacity = opacity.coerceAtLeast(theme.scrimAlphaMin)
-                    },
-                    label = { Text(candidate.label) },
-                )
-            }
+        StylePicker(selected = style) { candidate ->
+            style = candidate
+            // The palette follows the style rather than resetting: the
+            // dark/light choice is a statement about the footage this slate
+            // will land on, which the new style knows nothing about.
+            theme = candidate.adopt(theme)
+            opacity = opacity.coerceAtLeast(theme.scrimAlphaMin)
         }
-        Text(style.description, color = Muted, fontSize = 12.sp)
 
         // ---- layout ---------------------------------------------------------
         Label("Layout")
@@ -1245,28 +1377,24 @@ private fun Editor(
         }
 
         // ---- palette --------------------------------------------------------
-        // Grouped by mode rather than named by footage, because the two mean
-        // different things depending on the style: for one that paints no card
-        // the mode is a statement about the frame behind it, and for one that
-        // paints its own it describes the card. The line below says both rather
-        // than a label that is right for half the styles.
-        Label("Palette — dark")
-        PaletteRow(style.themes.filter { it.isDark }, theme) { picked ->
+        // One row, dark palettes then light. Two headings spent a heading and a
+        // row gap on a distinction the swatches already make: each is drawn on
+        // the surface it was validated against, so the dark ones are dark discs
+        // and the light ones are light discs, and the grouping is legible
+        // before any label is read.
+        //
+        // Sorted rather than taken in the style's own order, which interleaves
+        // the two for some styles — unsorted, the row was a chequer of light
+        // and dark discs where the eye had nothing to group on. The sort is
+        // what carries the meaning the two headings used to.
+        val palettes = remember(style) {
+            style.themes.sortedByDescending { it.isDark }
+        }
+        Label("Palette")
+        PaletteRow(palettes, theme) { picked ->
             theme = picked
             opacity = opacity.coerceAtLeast(picked.scrimAlphaMin)
         }
-
-        Label("Palette — light")
-        PaletteRow(style.themes.filter { !it.isDark }, theme) { picked ->
-            theme = picked
-            opacity = opacity.coerceAtLeast(picked.scrimAlphaMin)
-        }
-        Text(
-            "Dark suits dark footage; light suits a pale background — or, on a " +
-                "style with its own card, describes the card.",
-            color = Muted,
-            fontSize = 12.sp,
-        )
 
         // ---- panel opacity --------------------------------------------------
         Label("Panel opacity  ${(opacity.coerceIn(minOpacity, 1f) * 100).toInt()}%")
@@ -1293,6 +1421,15 @@ private fun Editor(
             Toggle("Panel", showScrim) { showScrim = it }
             Toggle("Ceiling", showCeiling) { showCeiling = it }
             Toggle("Gas switches", showGas) { showGas = it }
+            // Absent rather than greyed on the one style that cannot honour it.
+            // The segment screen quantises the profile to one minute and one
+            // metre, and a curve through a staircase is a staircase with
+            // rounded corners — so the style says it cannot, and the control is
+            // not offered. Same rule as a dive row that refuses selection
+            // instead of being selected and then dropped.
+            if (style.supportsSmooth) {
+                Toggle("Smooth curve", smooth) { smooth = it }
+            }
         }
 
         // ---- figures --------------------------------------------------------
@@ -1426,11 +1563,79 @@ private fun Editor(
 }
 
 /**
+ * Which style, in one row whatever the count.
+ *
+ * This was a wrapping row of filter chips, which is the right shape for a
+ * handful and the wrong one for nine: it stood three rows tall and pushed the
+ * preview — the thing every one of these settings is judged against — off the
+ * top of the screen before a single one had been touched. Chips also say "any
+ * number of these" with their shape, while a style is one-of-N.
+ *
+ * A menu rather than a scrolling row of chips. A row that scrolls hides its own
+ * tail, which is the objection already recorded on [ChipRow] and is worse here:
+ * a style nobody scrolls to is a style nobody knows the app has. The menu costs
+ * one extra tap per change and in exchange shows every style at once. Adding a
+ * tenth style costs no vertical space at all.
+ *
+ * Names only. The descriptions were carried here when this stopped being a row
+ * of chips, and nine of them wrapped to two lines each — which buried the nine
+ * words that actually distinguish the entries in fifty that do not, and made a
+ * list of nine short names read as a wall. The preview answers the question a
+ * description was answering, and answers it better: pick a style and the slate
+ * redraws in it.
+ */
+@Composable
+private fun StylePicker(selected: SlateStyle, onPick: (SlateStyle) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+
+    Box(Modifier.fillMaxWidth()) {
+        OutlinedButton(
+            onClick = { open = true },
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+        ) {
+            Text(selected.label, modifier = Modifier.weight(1f), textAlign = TextAlign.Start)
+            Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            SLATE_STYLES.forEach { candidate ->
+                val current = candidate.id == selected.id
+                DropdownMenuItem(
+                    onClick = {
+                        onPick(candidate)
+                        open = false
+                    },
+                    text = {
+                        Text(
+                            candidate.label,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = if (current) FontWeight.Bold else null,
+                        )
+                    },
+                    // A mark on the current one, because the anchor above shows
+                    // only its name and the menu covers the anchor when open.
+                    trailingIcon = {
+                        if (current) Icon(Icons.Filled.Check, contentDescription = "Selected")
+                    },
+                )
+            }
+        }
+    }
+}
+
+/**
  * Step through the dives a batch holds.
  *
  * Wraps at both ends. This is for flipping back and forth while judging a
  * palette against several dives, not for navigating a list, and a stop at the
  * last one just costs a second gesture to get back to the first.
+ *
+ * The arrows carry a filled container rather than sitting bare. Bare, they were
+ * two thin grey chevrons directly under a preview that is the busiest thing on
+ * the screen — the one control a batch cannot be used without, drawn as the
+ * faintest marks near it, and reported as invisible. A tonal container is what
+ * makes them read as buttons at all; the count between them says which of the
+ * two ends is being approached, so the arrows themselves do not have to.
  */
 @Composable
 private fun DiveSwitcher(position: Int, count: Int, onStep: (Int) -> Unit) {
@@ -1439,15 +1644,22 @@ private fun DiveSwitcher(position: Int, count: Int, onStep: (Int) -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        IconButton(onClick = { onStep(-1) }) {
+        FilledTonalIconButton(onClick = { onStep(-1) }) {
             Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous dive")
         }
-        Text(
-            "Every setting below applies to all $count",
-            color = Muted,
-            fontSize = 12.sp,
-        )
-        IconButton(onClick = { onStep(1) }) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                "${position + 1} / $count",
+                color = OnSurface,
+                style = MaterialTheme.typography.labelLarge,
+            )
+            Text(
+                "Every setting below applies to all $count",
+                color = Muted,
+                fontSize = 12.sp,
+            )
+        }
+        FilledTonalIconButton(onClick = { onStep(1) }) {
             Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next dive")
         }
     }

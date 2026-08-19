@@ -41,14 +41,6 @@ COLOUR_FIELDS = [
     ("surfaceEdge", "surface_edge"),
     ("ornament", "ornament"),
     ("curveEnd", "curve_end"),
-    ("containerPrimary", "container_primary"),
-    ("onContainerPrimary", "on_container_primary"),
-    ("containerNeutral", "container_neutral"),
-    ("onContainerNeutral", "on_container_neutral"),
-    ("containerAccent", "container_accent"),
-    ("onContainerAccent", "on_container_accent"),
-    ("containerHazard", "container_hazard"),
-    ("onContainerHazard", "on_container_hazard"),
 ]
 
 HEADER = """package io.github.paulcharp.diveslate.core
@@ -110,26 +102,6 @@ data class SlateTheme(
     val ornament: Long,
     /** Far stop of a gradient curve, equal to [curve] where it is flat. */
     val curveEnd: Long,
-    /**
-     * Filled containers and the ink that reads on each, in pairs.
-     *
-     * For a style that puts a figure *inside* a shape rather than on the card.
-     * The second half of each pair is not derivable from the palette's ordinary
-     * ink — a pale container in a dark scheme wants dark text, which no other
-     * token here holds — so the pairs are stated together and their contrast is
-     * checked at design time, at the 4.5:1 text bar.
-     *
-     * [containerHazard] is the one with a meaning rather than a variety: it is
-     * for a figure describing a constraint the dive was under, not a quantity.
-     */
-    val containerPrimary: Long,
-    val onContainerPrimary: Long,
-    val containerNeutral: Long,
-    val onContainerNeutral: Long,
-    val containerAccent: Long,
-    val onContainerAccent: Long,
-    val containerHazard: Long,
-    val onContainerHazard: Long,
     val fontSize: Float,
     val titleSize: Float,
     val labelSize: Float,

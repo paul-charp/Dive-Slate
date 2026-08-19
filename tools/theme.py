@@ -48,8 +48,6 @@ from palette import (
     PaletteReport,
     best_in_band,
     contrast,
-    hex_to_oklch,
-    max_chroma,
     oklch_to_hex,
     pick_accent,
     snap_to_band,
@@ -136,22 +134,6 @@ class Theme:
 
     #: Far stop of a gradient depth curve. Falls back to a flat :attr:`curve`.
     curve_end: str | None = None
-
-    # Filled containers, in pairs. A style that puts a figure inside a shape
-    # rather than on the card needs a background *and* the ink that reads on it,
-    # and the second is not derivable from the palette's ordinary ink: a chip
-    # filled with a pale tone in a dark scheme wants dark text on it, which no
-    # other token in this palette holds. Roles rather than Material names,
-    # because any style could fill a pill; Material is only the first to.
-    container_primary: str | None = None
-    on_container_primary: str | None = None
-    container_neutral: str | None = None
-    on_container_neutral: str | None = None
-    container_accent: str | None = None
-    on_container_accent: str | None = None
-    #: For the one figure that describes a constraint rather than a quantity.
-    container_hazard: str | None = None
-    on_container_hazard: str | None = None
 
     # Type.
     font_family: str = (
@@ -327,11 +309,6 @@ _PRESETS: tuple[tuple[str, int, str], ...] = (
 )
 
 
-def _seed_for(hue: float, mode: str) -> str:
-    """A seed colour for a hue. Only its hue survives — the tones are re-derived."""
-    return oklch_to_hex(0.55, min(max_chroma(0.55, hue), 0.14), hue)
-
-
 def _base_for(hue: float, mode: str) -> str:
     return oklch_to_hex(*best_in_band(hue, mode), hue)
 
@@ -371,7 +348,6 @@ def style_theme(
     surface_edge: str | None = None,
     ornament: str | None = None,
     curve_end: str | None = None,
-    containers: dict[str, str] | None = None,
     strict: bool = True,
 ) -> Theme:
     """One style's palette, stated rather than derived from a single hue.
@@ -389,7 +365,6 @@ def style_theme(
     """
     surface_ink = ink_secondary or _rgba_of(ink, 0.86)
     fill_colour = fill or curve
-    containers = containers or {}
     theme = Theme(
         name=name,
         assumed_surface=surface,
@@ -414,14 +389,6 @@ def style_theme(
         surface_edge=surface_edge,
         ornament=ornament,
         curve_end=curve_end,
-        container_primary=containers.get("container_primary"),
-        on_container_primary=containers.get("on_container_primary"),
-        container_neutral=containers.get("container_neutral"),
-        on_container_neutral=containers.get("on_container_neutral"),
-        container_accent=containers.get("container_accent"),
-        on_container_accent=containers.get("on_container_accent"),
-        container_hazard=containers.get("container_hazard"),
-        on_container_hazard=containers.get("on_container_hazard"),
     )
     report = validate_theme(theme)
     if strict and not report.ok:
@@ -476,145 +443,6 @@ def _rgba_of(value: str, alpha: float) -> str:
     if alpha >= 1.0:
         return f"#{r:02x}{g:02x}{b:02x}"
     return f"rgba({r},{g},{b},{alpha:g})"
-
-
-def material_palette(name: str, seed: str, mode: str) -> Theme:
-    """A Material 3 scheme derived from one seed, in OKLCH rather than HCT.
-
-    Material's own generator works in HCT and would have to be ported whole to
-    reproduce it exactly. What it is doing, though, is picking tones off one hue
-    at fixed lightness targets, and OKLCH does that directly — so the tokens are
-    still *computed from the seed* rather than eyedropped off a screenshot,
-    which is the property that matters here.
-
-    The divergence is deliberate and worth stating plainly: this is Material's
-    method, not Material's arithmetic, so the tones land near Google's but not
-    on them. Nothing downstream compares the two, and the palette still has to
-    clear the same gates as every other one in this file.
-
-    Dynamic colour is the other half of Material You and it is **not** here, and
-    must not arrive later: a hue taken off someone's wallpaper has cleared none
-    of these gates, and the whole argument in ``tools/palette.py`` rests on
-    every shipped colour having cleared them.
-    """
-    _, chroma, hue = hex_to_oklch(seed)
-    light = mode == "light"
-
-    def tone(lightness: float, want: float, at_hue: float | None = None) -> str:
-        h = hue if at_hue is None else at_hue
-        return oklch_to_hex(lightness, min(max_chroma(lightness, h), want), h)
-
-    # Neutral surface, faintly tinted by the seed, exactly as M3 does it.
-    surface = tone(0.95 if light else 0.26, 0.012)
-    ink = tone(0.23 if light else 0.90, 0.012)
-    primary = tone(0.48 if light else 0.80, min(chroma, 0.12))
-    # Error is a fixed hue in Material too — the one role that is not free to
-    # follow the seed, for the same reason the ceiling red was fixed here.
-    error = oklch_to_hex(0.52 if light else 0.78, 0.16 if light else 0.11, 27.0)
-
-    # Material puts tertiary 60° off the seed, and for chip backgrounds that is
-    # fine — a chip is a shape with a label on it. This one also paints the gas
-    # switches, which are marks on the plot with the curve and the ceiling, and
-    # at 60° off an ocean seed it lands on indigo: ΔE 10.3 against the primary
-    # to normal vision, 5.0 under deuteranopia. So the role is searched instead.
-    # Material's method for the surfaces, this project's measurement for
-    # anything that has to be told apart from another mark.
-    tertiary = pick_accent(
-        primary, error, mode=mode, surface=surface, profile="expressive"
-    )
-
-    # The container tones. Material's own scheme is a set of lightness stops off
-    # each hue, and this is that: a filled container sits high in the light
-    # scheme and low in the dark one, with its text at the opposite end. The
-    # pairing is what makes a chip legible, so it is checked rather than
-    # assumed — see the contrast assertion below.
-    container_l, on_l = (0.89, 0.30) if light else (0.40, 0.90)
-    accent_hue = hex_to_oklch(tertiary)[2]
-
-    def pair(at_hue: float, container_c: float, on_c: float) -> tuple[str, str]:
-        return (
-            oklch_to_hex(
-                container_l, min(max_chroma(container_l, at_hue), container_c), at_hue
-            ),
-            oklch_to_hex(on_l, min(max_chroma(on_l, at_hue), on_c), at_hue),
-        )
-
-    containers = dict(
-        zip(
-            (
-                "container_primary",
-                "on_container_primary",
-                "container_neutral",
-                "on_container_neutral",
-                "container_accent",
-                "on_container_accent",
-                "container_hazard",
-                "on_container_hazard",
-            ),
-            (
-                *pair(hue, 0.075, 0.07),
-                *pair(hue, 0.02, 0.02),
-                *pair(accent_hue, 0.07, 0.06),
-                *pair(27.0, 0.09, 0.11),
-            ),
-        )
-    )
-
-    # A chip whose label does not clear the normal-text bar against its own fill
-    # is a chip that looks right in a palette viewer and fails on the slate.
-    # Material's tone stops are chosen to clear it; this checks that the OKLCH
-    # stand-ins do too, rather than trusting that they behave the same way.
-    for role in ("primary", "neutral", "accent", "hazard"):
-        background = containers[f"container_{role}"]
-        foreground = containers[f"on_container_{role}"]
-        ratio = contrast(foreground, background)
-        if ratio < 4.5:
-            raise ValueError(
-                f"{name}: the {role} container pair {foreground} on {background} "
-                f"measures {ratio:.2f}:1, below the 4.5:1 text bar"
-            )
-
-    return style_theme(
-        name=name,
-        mode=mode,
-        # The card is opaque and the marks are read against it, not against
-        # footage, so the transparent-slate lightness band does not apply.
-        profile="expressive",
-        surface=surface,
-        ink=ink,
-        ink_secondary=tone(0.42 if light else 0.80, 0.02),
-        ink_muted=tone(0.55 if light else 0.68, 0.02),
-        curve=primary,
-        fill=containers["container_primary"],
-        # Material fills the plot with the primary container rather than with a
-        # fade of the line, which is why both stops are the same tone.
-        fill_alpha=(1.0, 1.0),
-        ceiling=error,
-        accent=tertiary,
-        # surfaceContainer: the card sits a step off the surface it notionally
-        # rests on, which is how an M3 card reads as a card without a shadow.
-        scrim=tone(0.93 if light else 0.29, 0.02),
-        surface_tint=tone(0.90 if light else 0.32, 0.03),
-        surface_edge=tone(0.62 if light else 0.48, 0.015),
-        ornament=tone(0.78 if light else 0.42, 0.02),
-        containers=containers,
-    )
-
-
-#: The Material seeds, spread across the hues that clear the gates in *both*
-#: modes.
-#:
-#: Swept rather than picked: with the error role fixed at red — Material fixes it
-#: too, and for the same reason this project fixed the ceiling — the primary can
-#: only go where it still separates from red under simulation. That is 150–320°
-#: in the light scheme and 180–300° in the dark one, and a seed has to work in
-#: both, since every style ships a light palette and a dark one.
-_MATERIAL_SEEDS: tuple[tuple[str, float], ...] = (
-    ("ocean", 190.0),
-    ("cobalt", 225.0),
-    ("indigo", 260.0),
-    ("mauve", 300.0),
-)
 
 
 #: Every style's palettes, default first.
@@ -962,15 +790,5 @@ _register(
         surface_edge="rgba(223,234,246,0.4)",
         grid="rgba(223,234,246,0.16)",
         axis="rgba(223,234,246,0.34)",
-    ),
-)
-
-# ---- Material 3: the tonal, chipped, wavy one -----------------------------
-_register(
-    "material",
-    *(
-        material_palette(f"material-{name}-{mode}", _seed_for(hue, mode), mode)
-        for name, hue in _MATERIAL_SEEDS
-        for mode in ("light", "dark")
     ),
 )

@@ -72,8 +72,8 @@ def test_app_checks_the_repository_it_is_released_from() -> None:
     install fails on the phone, where the reason is invisible.
     """
     source = UPDATE_CHECK.read_text(encoding="utf-8")
-    match = re.search(r'"(https://github\.com/[^"]+)/releases/latest/', source)
-    assert match, "no /releases/latest/ manifest URL found in UpdateCheck.kt"
+    match = re.search(r'PROJECT_URL = "(https://github\.com/[^"]+)"', source)
+    assert match, "no PROJECT_URL constant found in UpdateCheck.kt"
 
     declared = re.search(
         r'^Repository = "(?P<url>[^"]+)"',
@@ -84,4 +84,14 @@ def test_app_checks_the_repository_it_is_released_from() -> None:
     assert match.group(1) == declared.group("url").rstrip("/"), (
         f"the app updates from {match.group(1)} but this project is "
         f"{declared.group('url')}"
+    )
+
+    # And the manifest is built from that constant rather than spelling the host
+    # out a second time. There are two places the repository is named in the app
+    # now — the updater and the link on the start screen — and one constant is
+    # what keeps a rename from fixing the visible one and leaving the updater
+    # pointed at whoever this was forked from.
+    assert re.search(r'"\$PROJECT_URL/releases/latest/', source), (
+        "UpdateCheck.kt does not build its manifest URL from PROJECT_URL — a "
+        "second hardcoded address is exactly what this test exists to prevent"
     )

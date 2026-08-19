@@ -96,7 +96,7 @@ object WrappedStyle : SlateStyle {
             )
         )
 
-        val points = profilePoints(dive, frame)
+        val points = profileTrace(dive, frame, options)
         ops.add(
             SlateOp.Path(
                 points = closedToSurface(points, frame.plotTop),
@@ -105,6 +105,7 @@ object WrappedStyle : SlateStyle {
                 // under the line, which is the whole difference between this
                 // style and a chart.
                 fill = SlateFill.Solid(theme.curveFillTop),
+                smooth = options.smoothProfile,
             )
         )
         if (options.showCeiling) {
@@ -120,6 +121,7 @@ object WrappedStyle : SlateStyle {
             SlateOp.Path(
                 points = points, closed = false,
                 strokeArgb = theme.curve, strokeWidth = m.px(7f),
+                smooth = options.smoothProfile,
             )
         )
         if (options.showGas) ops.addAll(gasOps(dive, frame, theme, SlateFont.BLACK))
@@ -139,50 +141,6 @@ object WrappedStyle : SlateStyle {
             ops.addAll(figureOps(stats[index], slot.first, slot.second, m, ink))
         }
 
-        // ---- sparkles ------------------------------------------------------
-        // Drawn rather than typed. The mockup set them as a glyph, which is a
-        // font dependency for a decoration: the star is missing from several
-        // Android system fonts and renders as a tofu box, and a box in the
-        // corner of a badge looks like a bug in the export.
-        ops.addAll(sparkles(frame, theme, m))
-
         return Slate(width = frame.width, height = frame.height, ops = ops)
-    }
-
-    private fun sparkles(
-        frame: SlateFrame,
-        theme: SlateTheme,
-        m: LayoutMetrics,
-    ): List<SlateOp> {
-        // Kept inside the padding box, not hung off the corners. The slate's
-        // bounds are the exported image, so a sparkle placed half a radius past
-        // the edge is not cropped softly — it is a clipped semicircle, and only
-        // on whichever layout happened to be narrow.
-        val big = minOf(m.px(26f), frame.inner * 0.06f)
-        return listOf(
-            sparkle(Pt(frame.right - big, frame.headingTop + big), big, theme),
-            sparkle(Pt(frame.right - big * 3f, frame.headingTop + big * 2.6f), big * 0.5f, theme),
-            sparkle(Pt(big * 0.9f, frame.height - big * 0.9f), big * 0.6f, theme),
-        )
-    }
-
-    /** A four-pointed star: long points, waisted sides. */
-    private fun sparkle(centre: Pt, radius: Float, theme: SlateTheme): SlateOp {
-        val waist = radius * 0.42f
-        val diagonal = waist * 0.7071f
-        return SlateOp.Path(
-            points = listOf(
-                Pt(centre.x, centre.y - radius),
-                Pt(centre.x + diagonal, centre.y - diagonal),
-                Pt(centre.x + radius, centre.y),
-                Pt(centre.x + diagonal, centre.y + diagonal),
-                Pt(centre.x, centre.y + radius),
-                Pt(centre.x - diagonal, centre.y + diagonal),
-                Pt(centre.x - radius, centre.y),
-                Pt(centre.x - diagonal, centre.y - diagonal),
-            ),
-            closed = true,
-            fill = SlateFill.Solid(theme.ornament),
-        )
     }
 }

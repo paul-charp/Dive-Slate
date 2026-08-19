@@ -53,14 +53,16 @@ class MainActivity : ComponentActivity() {
         // compose side takes the insets per screen, so an app bar can paint its
         // own colour behind the status bar instead of stopping short of it.
         //
-        // Both bars are pinned to the dark style rather than left on auto.
-        // Auto picks its icon colour from the system's light/dark setting, and
-        // this app is dark whatever the phone is set to — on a light-themed
-        // phone that gave dark clock and battery glyphs on a near-black bar,
-        // which is unreadable.
+        // Both bars are on auto, which picks its icon colour from the system's
+        // light/dark setting. That is right again now that the app follows the
+        // same setting; it was wrong for as long as the app was pinned dark,
+        // where a light-themed phone gave dark clock and battery glyphs on a
+        // near-black bar. The two have to be decided together — whichever way
+        // the shell goes, the bar icons go with it — so if the app is ever
+        // pinned to one mode again, these get pinned to match.
         enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+            statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
         )
         // Guarded, and before setContent: an unexpected intent must not kill
         // the activity before there is a screen on which to say so. A share
