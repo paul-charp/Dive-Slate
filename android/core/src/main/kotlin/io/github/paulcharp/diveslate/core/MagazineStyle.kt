@@ -124,11 +124,12 @@ object MagazineStyle : SlateStyle {
         }
         // No area fill: the whole idiom is line and type, and a wash would be
         // the one grey tone in a design that has none.
-        val points = profilePoints(dive, frame)
+        val points = profileTrace(dive, frame, options)
         ops.add(
             SlateOp.Path(
                 points = points, closed = false,
                 strokeArgb = theme.curve, strokeWidth = m.px(6f),
+                smooth = options.smoothProfile,
             )
         )
         if (options.showGas) ops.addAll(gasOps(dive, frame, theme, SlateFont.CONDENSED))

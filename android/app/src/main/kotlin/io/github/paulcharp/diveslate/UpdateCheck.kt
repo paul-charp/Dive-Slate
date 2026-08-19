@@ -25,6 +25,16 @@ import java.security.MessageDigest
 object UpdateCheck {
 
     /**
+     * Where the app comes from, for the link on the start screen.
+     *
+     * Here rather than in the UI so there is one repository address in the app
+     * and the manifest below is built from it. Two copies would be two things to
+     * change on a rename, and the one that got missed would be the one nobody
+     * exercises until a release quietly stops being offered.
+     */
+    const val PROJECT_URL = "https://github.com/paul-charp/Dive-Slate"
+
+    /**
      * The newest release's manifest.
      *
      * `/releases/latest/download/<asset>` is a path GitHub resolves to whichever
@@ -37,7 +47,7 @@ object UpdateCheck {
      * published without being offered to every installed copy.
      */
     private const val MANIFEST_URL =
-        "https://github.com/paul-charp/Dive-Slate/releases/latest/download/update.json"
+        "$PROJECT_URL/releases/latest/download/update.json"
 
     /** Where a downloaded APK is allowed to have come from. */
     private val ALLOWED_HOSTS = setOf(

@@ -11,7 +11,7 @@
 [![Android 10+](https://img.shields.io/badge/Android-10%2B-3987E5)](#get-it)
 [![License: MIT](https://img.shields.io/badge/License-MIT-informational)](LICENSE)
 
-[**Download the APK**](https://github.com/paul-charp/Dive-Slate/releases/latest) · [A trip at a time](#a-trip-at-a-time) · [Layouts](#four-layouts) · [Figures](#the-figures) · [Themes](#nine-themes)
+[**Download the APK**](https://github.com/paul-charp/Dive-Slate/releases/latest) · [A trip at a time](#a-trip-at-a-time) · [Layouts](#four-layouts) · [Figures](#the-figures) · [Styles](#eight-styles) · [Palettes](#twenty-four-palettes)
 
 </div>
 
@@ -31,8 +31,8 @@ video frame or a story and the shot still shows through.
   come out matching, drawn with the settings you chose once.
 - 🖼️ **Four layouts.** Full-frame strips, or corner badges small enough to stay
   out of the way of the shot.
-- 🎨 **Nine palettes**, each machine-checked for colour-blind separation and
-  contrast — not eyeballed.
+- 🎨 **Eight styles, 24 palettes**, each palette machine-checked for
+  colour-blind separation and contrast — not eyeballed.
 - 📐 **Nothing invented.** A figure your log cannot answer is left off rather
   than guessed at.
 - 📶 **Works offline.** The only thing it ever asks the network is whether a
@@ -164,9 +164,9 @@ Three independent controls, broadest first:
 
 | | what it decides | choices |
 |---|---|---|
-| **Style** | how the slate is drawn — the art direction | nine, below |
+| **Style** | how the slate is drawn — the art direction | eight, below |
 | **Layout** | how it is proportioned — where things go, how big | Wide, Tall, Compact, Watch |
-| **Theme** | what colour it is | 32 palettes, 2–9 per style |
+| **Theme** | what colour it is | 24 palettes, 2–9 per style |
 
 They compose: every layout works with every style. A style carries its own
 palettes, because a palette is validated against the marks it will be painted
@@ -196,21 +196,35 @@ footage.
 
 </details>
 
-## Nine styles
+## Eight styles
 
-Same dive, same figures, nine ways of drawing them.
+Same dive, same figures, eight ways of drawing them. Each below is the Wide
+layout in that style's default palette, on the app's checkerboard.
 
-| | |
-|---|---|
-| **Modern** | Flat and geometric. Reads as instrumentation. The default. |
-| **Wrapped** | One loud opaque card, sparkles in the corners. Made to be posted. |
-| **Sticker** | Rounded and ringed, the profile drawn as a warm-to-cool ramp. |
-| **Magazine** | Masthead rules and condensed figures, no card of its own. |
-| **Frosted** | Two-stop glass with a lit edge, smoked or misted. |
-| **HUD** | A cut-cornered panel, a dot field, a trace that glows. |
-| **Dive computer** | A bezel and a segment screen; the trace drawn as steps. |
-| **Survey** | Grained paper, a labelled depth grid, hachures under the line. |
-| **Material** | A tonal card: header row, each figure in a tonal chip. |
+<table>
+<tr>
+<td width="50%" align="center"><img src="docs/images/style-modern.png" alt="Modern style preview"><br><strong>Modern</strong> · flat and geometric, reads as instrumentation — the default</td>
+<td width="50%" align="center"><img src="docs/images/style-wrapped.png" alt="Wrapped style preview"><br><strong>Wrapped</strong> · one loud opaque card, made to be posted</td>
+</tr>
+<tr>
+<td align="center"><img src="docs/images/style-sticker.png" alt="Sticker style preview"><br><strong>Sticker</strong> · rounded and ringed, the profile a warm-to-cool ramp</td>
+<td align="center"><img src="docs/images/style-magazine.png" alt="Magazine style preview"><br><strong>Magazine</strong> · masthead rules and condensed figures, no card of its own</td>
+</tr>
+<tr>
+<td align="center"><img src="docs/images/style-frosted.png" alt="Frosted style preview"><br><strong>Frosted</strong> · two-stop glass with a lit edge, smoked or misted</td>
+<td align="center"><img src="docs/images/style-holo.png" alt="HUD style preview"><br><strong>HUD</strong> · a cut-cornered panel, a dot field, a trace that glows</td>
+</tr>
+<tr>
+<td align="center"><img src="docs/images/style-retro.png" alt="Dive computer style preview"><br><strong>Dive computer</strong> · a bezel and a segment screen, the trace drawn as steps</td>
+<td align="center"><img src="docs/images/style-topo.png" alt="Survey style preview"><br><strong>Survey</strong> · grained paper, a labelled depth grid, hachures under the line</td>
+</tr>
+</table>
+
+The profile is drawn as a smoothed curve by default, and **Smooth curve** in
+Elements turns that off when you want every tooth of a sawtooth bottom rather
+than a line through them. Dive computer is the one style that does not offer it:
+its segment screen quantises the profile to one minute and one metre, and a
+curve through a staircase is a staircase with rounded corners.
 
 Type comes from Android's own families rather than bundled faces — the APK
 carries no fonts.
@@ -263,7 +277,7 @@ has no gradient factors and must not appear to.
 
 </details>
 
-## Thirty-two palettes
+## Twenty-four palettes
 
 Generated and machine-checked rather than chosen. Modern's nine are grouped by
 the footage they are for:
@@ -274,10 +288,9 @@ the footage they are for:
 
 Each is derived from one base hue: that becomes the depth curve, and the
 gas-switch accent is then found by searching the hue circle for the colour that
-separates best from both the curve and the deco-ceiling red. The other eight
+separates best from both the curve and the deco-ceiling red. The other seven
 styles bring their own — a violet card and a yellow one, two panes of glass,
-three dive-computer screens, a cream survey sheet and a blueprint, and eight
-Material schemes across four seeds.
+three dive-computer screens, and a cream survey sheet with a blueprint.
 
 Every palette is validated for colour-vision-deficiency separation, chroma,
 lightness and contrast before it ships — arithmetic that runs at design time, so

@@ -243,6 +243,18 @@ interface SlateStyle {
      */
     val defaultScrimAlpha: Float get() = defaultTheme.scrimAlphaNominal
 
+    /**
+     * Whether [OverlayOptions.smoothProfile] means anything to this style.
+     *
+     * False for a style that resamples the profile for reasons of its own — the
+     * segment screen quantises to one minute and one metre, and a curve through
+     * a staircase is a staircase with rounded corners. The UI reads this rather
+     * than naming the style, and hides the control instead of greying it: a
+     * toggle that does nothing when pressed is worse than one never offered,
+     * which is the same rule the dive list applies to a row it cannot draw.
+     */
+    val supportsSmooth: Boolean get() = true
+
     /** Produce the display list. [dive] is guaranteed to have samples. */
     fun render(dive: Dive, options: OverlayOptions): Slate
 }
@@ -263,7 +275,6 @@ val SLATE_STYLES: List<SlateStyle> = listOf(
     HoloStyle,
     RetroStyle,
     TopoStyle,
-    MaterialStyle,
 )
 
 fun styleById(id: String): SlateStyle? = SLATE_STYLES.firstOrNull { it.id == id }

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      The dark splash, for Android 12 and up.
+
+      Both qualifiers are needed on one folder: values-night alone loses to
+      values-v31 on an Android 12+ phone in dark mode, since the more specific
+      match wins and the version qualifier is not the one being varied here.
+      The folder name puts them in the order aapt expects — night, then version.
+    -->
+    <style name="Theme.DiveSlate" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#0B1013</item>
+        <item name="android:windowSplashScreenBackground">#0B1013</item>
+    </style>
+</resources>

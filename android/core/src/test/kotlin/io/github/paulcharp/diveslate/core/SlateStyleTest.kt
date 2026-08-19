@@ -356,6 +356,64 @@ class SlateStyleTest {
         )
     }
 
+    /**
+     * And the styles have to honour it, not just the layout.
+     *
+     * The test above asks [SlateLayout] what it quotes. That is not the same
+     * question as what a style actually sets, and the difference is where this
+     * went wrong once: a style scaled its figures down to pay for the padding
+     * its own containers added, which took the watch badge to 51px numerals —
+     * under the 56px of the layout spanning the whole frame, and under Compact's
+     * 80px on a *larger* badge. Every metric-level test passed, because no
+     * metric had moved. The smallest slate was setting the smallest numbers and
+     * only a screenshot could see it. The style is gone and so is the lever it
+     * used, but the gap in the guarding was the real defect, and this closes it
+     * for whatever is added next.
+     *
+     * Largest text as the stand-in for "the numerals": on every style the figure
+     * value is the biggest thing on the slate, and the assertion below says so
+     * out loud, so a style that ever sets a heading larger fails here rather
+     * than quietly changing what this measures.
+     */
+    @Test
+    fun `every style sets bigger numerals on the watch badge than on the wide one`() {
+        for (style in SLATE_STYLES) {
+            val sizes = mapOf(
+                SlateLayout.WATCH to largestText(style, SlateLayout.WATCH),
+                SlateLayout.WIDE to largestText(style, SlateLayout.WIDE),
+            )
+            assertTrue(
+                sizes.getValue(SlateLayout.WATCH) > sizes.getValue(SlateLayout.WIDE),
+                "${style.id} sets ${sizes.getValue(SlateLayout.WATCH)}px on the watch badge " +
+                    "and ${sizes.getValue(SlateLayout.WIDE)}px on the layout spanning the " +
+                    "frame — stacking is meant to buy bigger numerals, not smaller ones",
+            )
+        }
+    }
+
+    /**
+     * The largest text a style emits in a layout, which is its figure value.
+     *
+     * Asserted rather than assumed: if some style ever sets a heading or an
+     * ornament larger than its numbers, the caller above is silently measuring
+     * the wrong thing, and this is where that shows up.
+     */
+    private fun largestText(style: SlateStyle, layout: SlateLayout): Float {
+        val slate = renderOverlay(
+            dive,
+            OverlayOptions(style = style, layout = layout, theme = style.defaultTheme),
+        )
+        val texts = slate.ops.filterIsInstance<SlateOp.Text>()
+        assertTrue(texts.isNotEmpty(), "${style.id} drew no text in the ${layout.id} layout")
+        val biggest = texts.maxBy { it.sizePx }
+        assertTrue(
+            biggest.text.any { it.isDigit() },
+            "${style.id}'s largest text in the ${layout.id} layout is '${biggest.text}', " +
+                "not a figure — this test is measuring the wrong mark",
+        )
+        return biggest.sizePx
+    }
+
     /** A budget of nothing would render a slate with no numbers on it. */
     @Test
     fun `every layout has room for at least the two headline figures`() {
@@ -591,9 +649,9 @@ class SlateStyleTest {
     /**
      * Reducing the series before curving it must not lose the extreme.
      *
-     * The Material style draws its profile as a curve, and a spline through
-     * points a pixel apart is a polyline with extra arithmetic — so the series
-     * is coarsened first. That is the moment where a smoothing pass would
+     * A smoothed profile is drawn as a curve, and a spline through points a
+     * pixel apart is a polyline with extra arithmetic — so the series is
+     * coarsened first. That is the moment where a smoothing pass would
      * quietly become a *data* pass: drop to one sample per bucket and the
      * deepest point of the dive can fall in a bucket where something shallower
      * won, leaving the drawn profile shallower than the figure printed beside
@@ -608,7 +666,11 @@ class SlateStyleTest {
             val depth = if (step == 173) 240f else 60f + (step % 17)
             Pt(step.toFloat(), depth)
         }
-        val reduced = coarsened(points, 16f)
+        // At the step the styles actually use, not a token one: the whole
+        // reason SMOOTH_STEP_PX is free to be tuned for looks is that this
+        // property holds at any coarseness, so the test should be exercising
+        // the value someone would reach for when tuning it.
+        val reduced = coarsened(points, SMOOTH_STEP_PX)
 
         assertTrue(reduced.size < points.size, "coarsening reduced nothing")
         assertEquals(

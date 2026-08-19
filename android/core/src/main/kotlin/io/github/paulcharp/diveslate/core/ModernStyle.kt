@@ -162,10 +162,20 @@ object ModernStyle : SlateStyle {
             ops.addAll(ceilingOps(dive, ::sx, ::sy, plotTop, theme, m))
         }
 
-        val points = envelope(
+        // Coarsened when smoothing, for the same reason every other style
+        // coarsens: a spline through points a pixel apart is a polyline with
+        // extra arithmetic. This style builds its own series rather than going
+        // through profileTrace, because it maps the samples with closures of
+        // its own — so the reduction is applied here by hand, at the shared
+        // SMOOTH_STEP_PX rather than at a number of its own. A second copy of
+        // that constant is how the default style would end up smoothing
+        // differently from the other seven.
+        val traced = envelope(
             dive.samples.map { Pt(sx(it.timeSeconds), sy(it.depthMetres)) },
             plotWidth,
         )
+        val points =
+            if (options.smoothProfile) coarsened(traced, m.px(SMOOTH_STEP_PX)) else traced
         val area = buildList {
             add(Pt(points.first().x, plotTop))
             addAll(points)
@@ -175,12 +185,14 @@ object ModernStyle : SlateStyle {
             SlateOp.Path(
                 points = area, closed = true,
                 fill = SlateFill.Vertical(theme.curveFillTop, theme.curveFillBottom),
+                smooth = options.smoothProfile,
             )
         )
         ops.add(
             SlateOp.Path(
                 points = points, closed = false,
                 strokeArgb = theme.curve, strokeWidth = m.px(4f),
+                smooth = options.smoothProfile,
             )
         )
 

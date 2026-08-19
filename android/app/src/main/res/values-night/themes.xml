@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The dark half of values/themes.xml. See there for why both exist. -->
+    <style name="Theme.DiveSlate" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#0B1013</item>
+    </style>
+</resources>

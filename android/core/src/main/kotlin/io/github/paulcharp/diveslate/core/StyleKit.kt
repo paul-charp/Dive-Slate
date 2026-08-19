@@ -124,7 +124,6 @@ internal class SlateFrame private constructor(
     val statsTop: Float,
     val figureHeight: Float,
     /** What the style asked for; see [SlateFrame.of]. */
-    val figureScale: Float,
     private val durationSeconds: Double,
     private val depthMax: Double,
 ) {
@@ -159,23 +158,15 @@ internal class SlateFrame private constructor(
          * @param headingHeight room the style wants above the body, 0 for none.
          * @param extraBelowPlot room for anything drawn under the profile but
          *   above the figures — a divider, a rule, a legend strip.
-         * @param figureScale how large this style sets its figures relative to
-         *   the layout's nominal.
          *
-         * [figureScale] is the narrow exception to a style keeping its hands off
-         * the type scale, and it exists because a style that puts each figure in
-         * a *container* has changed the arithmetic the layout did. The layout's
-         * sizes were chosen for bare numerals — a watch badge sets 88px figures
-         * precisely because nothing surrounds them — and a container adds its
-         * padding and its background on top of that, so two of them stop reading
-         * as chips and start reading as panels with the profile squeezed
-         * underneath.
-         *
-         * The fix is not for the layout to know about chips. It is for the style
-         * to charge its ornament to *itself*: a container's padding comes out of
-         * the figure's own budget rather than being added to the badge. The
-         * layout still owns the ratios; the style says how much of its share the
-         * decoration costs.
+         * There used to be a `figureScale` here, so a style drawing each figure
+         * in a container could charge the padding to the figure rather than to
+         * the badge. It is gone with the style that used it, and the reason it
+         * is not being kept for the next one is that it was the wrong lever:
+         * the layout's sizes are a promise — the watch badge sets 88px numerals
+         * *because* it stacks them — and a style that scales them down to pay
+         * for its own ornament breaks that promise silently, which is exactly
+         * what happened. Ornament that does not fit shrinks the ornament.
          */
         fun of(
             dive: Dive,
@@ -183,10 +174,9 @@ internal class SlateFrame private constructor(
             stats: List<SlateStat>,
             headingHeight: Float,
             extraBelowPlot: Float = 0f,
-            figureScale: Float = 1f,
         ): SlateFrame {
             val m = options.metrics
-            val figureHeight = m.valueSize * figureScale + m.labelSize + m.px(10f)
+            val figureHeight = m.valueSize + m.labelSize + m.px(10f)
             val rows = if (m.figuresStacked) max(stats.size, 1) else 1
             val statsBlock = figureHeight * rows + m.gap * (rows - 1)
 
@@ -206,7 +196,6 @@ internal class SlateFrame private constructor(
                 plotTop = plotTop,
                 statsTop = statsTop,
                 figureHeight = figureHeight,
-                figureScale = figureScale,
                 durationSeconds = max(dive.computedDurationSeconds, 1.0),
                 // Headroom, so the deepest point does not sit on the baseline.
                 depthMax = max(dive.computedMaxDepthMetres, 1.0) * 1.06,
@@ -275,6 +264,55 @@ internal fun steppedProfile(
     }
     previousY?.let { points.add(Pt(frame.sx(dive.computedDurationSeconds), it)) }
     return points
+}
+
+/**
+ * How coarse the series gets before it is drawn as a curve, at 1080px.
+ *
+ * A polyline wants [envelope]'s two points per pixel; a curve wants far fewer,
+ * since a spline through points a pixel apart is a polyline with extra
+ * arithmetic. This started at 34, which was the point where the reference dive
+ * stopped reading as a jagged line someone had rounded off — enough to make the
+ * line legal as a curve, not enough to make it *look* like one. At 64 the
+ * ascent reads as one continuous sweep and the sawtooth bottom as a rolling
+ * floor, which is what a dive profile actually looks like.
+ *
+ * **This number is free to move because of what [coarsened] guarantees.** Every
+ * bucket keeps its shallowest *and* its deepest sample, so a coarser step
+ * changes how much of the wobble survives and never where the extremes are: the
+ * deepest point of the dive is on the drawing at any step, and the profile can
+ * never contradict the figure printed beside it. Were the reduction an average,
+ * or a first-sample rule, this constant would be a depth error waiting for
+ * someone to tune it.
+ *
+ * What it does cost is detail, and that is why smoothing stayed a choice —
+ * [OverlayOptions.smoothProfile] turns it off for a reader who wants every
+ * tooth of a sawtooth bottom rather than a line through them.
+ */
+internal const val SMOOTH_STEP_PX = 64f
+
+/**
+ * The series a style should draw its profile through, given the options.
+ *
+ * One place, so that "smooth" means the same thing on every style that offers
+ * it. Callers pair this with `smooth = options.smoothProfile` on the ops they
+ * emit — the two go together: coarsening without smoothing is just a worse
+ * polyline, and smoothing without coarsening is arithmetic nobody can see.
+ *
+ * The one style that does not come through here is the segment screen, which
+ * quantises to one minute and one metre and draws its own steps.
+ */
+internal fun profileTrace(
+    dive: Dive,
+    frame: SlateFrame,
+    options: OverlayOptions,
+): List<Pt> {
+    val points = profilePoints(dive, frame)
+    return if (options.smoothProfile) {
+        coarsened(points, frame.m.px(SMOOTH_STEP_PX))
+    } else {
+        points
+    }
 }
 
 /**
@@ -568,8 +606,6 @@ internal data class FigureInk(
     val labelSpacing: Float = 0.10f,
     val uppercaseLabel: Boolean = true,
     val align: TextAnchor = TextAnchor.START,
-    /** Matches [SlateFrame.figureScale]; the two must be given the same value. */
-    val valueScale: Float = 1f,
 )
 
 /**
@@ -593,7 +629,7 @@ internal fun figureOps(
     val unitRoom =
         if (stat.unit.isEmpty()) 0f
         else m.px(8f) + advanceOf(stat.unit, unitSize, ink.labelFont)
-    val nominal = m.valueSize * ink.valueScale
+    val nominal = m.valueSize
     val valueSize = fittedSize(
         stat.value,
         nominal,

@@ -7,10 +7,16 @@
       The system bars are left to enableEdgeToEdge, which makes them
       transparent and lets the app bars paint behind them. Setting a colour here
       as well would fight it, and on Android 15+ the colour attributes are
-      ignored regardless. Dark because the app is mostly a preview surface for
-      imagery.
+      ignored regardless.
+
+      This is the light value; values-night carries the dark one. The launch
+      flash has to match the mode the app is about to compose in, or a light
+      phone gets a black frame before the first Compose frame and a dark one
+      gets a white flash — which is the same defect either way round, just
+      pointed at whichever half of the users the single value was wrong for.
+      Keep these two in step with `background` in the fallback schemes.
     -->
     <style name="Theme.DiveSlate" parent="android:Theme.Material.NoActionBar">
-        <item name="android:windowBackground">#0B1013</item>
+        <item name="android:windowBackground">#F7FAFD</item>
     </style>
 </resources>

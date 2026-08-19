@@ -6,11 +6,11 @@
       From API 31 the system draws the icon on windowSplashScreenBackground and
       does *not* fall back to windowBackground when it is unset — it uses its own
       default, which is white. So a dark app flashed white on every cold start.
-      Below 31 the legacy path does use windowBackground, which is already this
-      colour, so this file only needs to exist for v31+.
+      Below 31 the legacy path does use windowBackground, which is already the
+      right colour, so this file and its night variant only exist for v31+.
     -->
     <style name="Theme.DiveSlate" parent="android:Theme.Material.NoActionBar">
-        <item name="android:windowBackground">#0B1013</item>
-        <item name="android:windowSplashScreenBackground">#0B1013</item>
+        <item name="android:windowBackground">#F7FAFD</item>
+        <item name="android:windowSplashScreenBackground">#F7FAFD</item>
     </style>
 </resources>
