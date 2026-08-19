@@ -53,10 +53,12 @@ jobs:
           printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/diveslate.jks"
           echo "Keystore decoded, $(stat -c%s "$RUNNER_TEMP/diveslate.jks") bytes."
 
-      # core:test runs here too. CI has already seen this commit in the ordinary
-      # case, but nothing stops a tag being pushed at a commit whose CI went
-      # red, and an APK published to people's phones is the wrong place to find
-      # that out. It costs a minute.
+      # Both suites run here too. CI has already seen this commit in the
+      # ordinary case, but nothing stops a tag being pushed at a commit whose CI
+      # went red, and an APK published to people's phones is the wrong place to
+      # find that out. It costs a minute. The app's own tests are included
+      # because one of them guards what the updater will accept as a release
+      # manifest, which is this workflow's own output.
       - name: Build signed release
         working-directory: android
         env:
@@ -69,7 +71,7 @@ jobs:
           # release log costs real legibility and protects nothing.
           DIVESLATE_KEY_ALIAS: ${{ vars.DIVESLATE_KEY_ALIAS }}
           DIVESLATE_KEY_PASSWORD: ${{ secrets.DIVESLATE_KEY_PASSWORD }}
-        run: ./gradlew core:test :app:assembleRelease
+        run: ./gradlew core:test :app:testDebugUnitTest :app:assembleRelease
 
       # AGP writes the versions it actually compiled in beside the APK. Read
       # them from there rather than grepping build.gradle.kts, which would be a

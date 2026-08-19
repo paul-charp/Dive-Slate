@@ -199,6 +199,10 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.13.0")
     implementation("androidx.core:core-ktx:1.19.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.11.0")
+    // The session state lives in a ViewModel so that a rotation cannot take the
+    // open dive log with it, and so an export in progress is not cancelled
+    // halfway by one. Pinned to the version lifecycle-runtime already resolves.
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.11.0")
     // The update check runs on lifecycleScope + Dispatchers.IO. Already present
     // transitively via lifecycle and Compose, and pinned to the version they
     // already resolve to — declared only because the code names it directly, and
@@ -208,4 +212,18 @@ dependencies {
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     implementation("androidx.compose.ui:ui-tooling-preview")
+
+    // Plain JVM unit tests, no device and no Robolectric. What they cover is
+    // the logic in this module that never needed Android to begin with — the
+    // settings that are persisted, the export filenames, and the validation the
+    // updater applies to a release manifest before an APK is installed. Code
+    // that genuinely needs the framework (MediaStore, the Canvas painter) is
+    // left to be exercised on a phone; a mocked Canvas would only prove the
+    // mock agrees with itself.
+    testImplementation("junit:junit:4.13.2")
+    // org.json is part of Android and is a throwing stub in a unit test. The
+    // real implementation on the test classpath is what lets the manifest
+    // parser be tested at all; it changes nothing about the APK, which uses the
+    // framework's copy.
+    testImplementation("org.json:json:20240303")
 }

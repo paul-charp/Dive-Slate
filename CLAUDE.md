@@ -34,7 +34,8 @@ tools/         Python. Palette maths and the generators for Themes.kt.
 ## Commands
 
 ```bash
-cd android && ./gradlew core:test          # 74 tests, no device needed
+cd android && ./gradlew core:test              # 87 tests, no device needed
+cd android && ./gradlew :app:testDebugUnitTest # 30 more, also no device
 cd android && ./gradlew :app:installDebug
 cd android && ./gradlew :app:assembleRelease   # signed if keystore.properties
                                                # is present, debug key if not —
@@ -102,10 +103,16 @@ android/core/
 android/app/
   MainActivity.kt     share intake, the intent handling described below,
                       and the batch export off the main thread
+  SessionState.kt     the ViewModel: open logs, current settings, export and
+                      update progress — everything a rotation must not take
+  SlateSettings.kt    the chosen look as one object, its normalisation rules,
+                      and the SharedPreferences store behind "save as default"
   SlatePainter.kt     paints core's display list onto a Canvas
   SlateFiles.kt       MediaStore export, FileProvider, export naming
   UpdateCheck.kt      self-update: manifest, download, checksum, installer
   ui/DiveSlateApp.kt  Compose UI
+  src/test/           JVM tests for the three above that need no framework:
+                      the settings round trip, the export names, the manifest
 
 tools/
   palette.py          OKLab/OKLCH maths, CVD simulation, the palette gates and
@@ -319,6 +326,12 @@ style, and *hides* the chip instead of greying it — a control that does nothin
 when pressed is worse than one never offered, the same rule the dive list
 applies to a row it cannot draw.
 
+**Retro has to *declare* that, and for a while it only did it in a comment.** It
+resamples for its own reasons and never calls `profileTrace`, so it ignored the
+flag rather than overriding it — which meant `supportsSmooth` stayed true, the
+chip was drawn, and pressing it did nothing. Ignoring a flag is not the same as
+answering it. Found by a test asking the question the UI asks.
+
 The smoothed profile is drawn through a coarser series — a spline through points a pixel apart is a
 polyline with extra arithmetic — using flat tangents, so each segment leaves one
 point horizontally and arrives at the next horizontally and the line stays inside
@@ -361,6 +374,95 @@ Two places where a style touches the data, both deliberate and both narrow:
   weight, and are drawn in the paper's brown rather than the survey blue. If
   anyone ever asks what interval they are at, delete them rather than inventing
   one.
+
+## The look is remembered, and nothing else about the app is
+
+Every control on the editor screen is one `SlateSettings` — style, layout,
+palette, units, opacity, elements, figures — and it lives in `SessionState`, a
+ViewModel, rather than in the composition that draws it.
+
+**That was a rotation bug before it was a feature.** All of it was `remember`ed
+inside the editor and the open dive log was a field on the activity, so turning
+the phone over destroyed both: a log opened from the picker went back to the
+start screen, and a look chosen over five minutes was gone. A share survived by
+accident — the intent is still attached to the recreated activity and got read
+again, which also meant the shared file was parsed a second time and every dive
+listed twice. `SessionState.handledIntent` is what stops the second read; the
+ViewModel is what stops the first loss.
+
+**The export and update coroutines run on `viewModelScope`, not
+`lifecycleScope`.** Once the state survives a rotation, work that does not is
+worse than before, not better: a cancelled batch would leave the progress bar
+stuck at "Saving 7 of 20" forever, because the state it is drawn from now
+outlives the coroutine that was writing it. Two consequences worth keeping:
+the file work takes `applicationContext`, and the chooser and the installer are
+parked in `SessionState.pendingLaunch` for whichever activity is on screen to
+start — an intent started on a destroyed activity is a share that silently never
+appears.
+
+**Saving is explicit, and there are three actions rather than one.** Persisting
+every slider drag would promote the last thing tried to the thing you always
+get, which is how a remembered default becomes a surprise; so the editor is a
+scratchpad and *Save as default* is a button. *Restore default* puts back what
+was saved and is offered only when there is something to go back to and the
+current look differs from it. *Factory reset* goes back to what the app shipped
+with **and forgets the saved default** — one that left the saved look in place
+would put it back on the next launch, which is the state someone reaching for
+that button is trying to leave — and it confirms first, being the one control
+that discards something the user made.
+
+**`SlateSettings.normalised()` is where a stored string stops being dangerous.**
+It is the only input in the app that can hold a state the UI cannot produce: a
+palette belonging to another style, four figures on a badge with room for two, a
+style id from a build since uninstalled. `renderOverlay` **refuses** a foreign
+palette, so a stored one would blank the preview on every launch with no way
+back except clearing the app's data. Normalisation adopts the palette (keeping
+the dark/light choice), clamps to the measured opacity floor, trims the figures
+to the layout's budget and drops keys this build does not know — and a test
+renders the full cross-product of what `decode` can return, because "anything
+storable is drawable" is the whole claim.
+
+Smoothing is deliberately *not* normalised away for the style that cannot
+honour it. `toOptions()` masks it instead, so what is drawn is right and what is
+remembered is what the user asked for — clearing the flag would mean one look at
+the segment screen silently threw the preference away for every style after it,
+which is the same reasoning that carries the dark/light choice across a style
+change.
+
+## Metric or imperial is a property of the reader
+
+The parsers already normalise `ft`, `psi` and `F` away — canonical units are
+metres, seconds, bar, Celsius, litres, whatever the exporting computer was set
+to — so `SlateUnits` is a presentation choice made at the far end, in
+`OverlayOptions`. A log written in feet and one written in metres produce the
+same slate; which units that slate *speaks* is the diver's choice, not the
+machine's.
+
+- **Convert first, round second.** 44.4 m is 146 ft. Rounding up to 45 m and
+  converting gives 148, which overstates the dive by nearly a metre — the badge
+  would be claiming a depth nobody reached. `ceilFeet` rounds the converted
+  value, and a test holds the ordering.
+- **Both systems or neither, never per figure.** A slate mixing feet with litres
+  is a set of numbers nobody's training pairs.
+- **The units decide how a figure is printed, never whether it exists.**
+  `availableStats` answers in metric for both, and the batch warning is built
+  from it.
+- **The survey's gridlines are chosen in the system they are labelled in.** A
+  metric ladder converted to feet labels the map 33, 66, 98 — numbers no diver
+  reads a depth as. `depthGridlines` takes the units and picks from a ladder per
+  system; `metresOfDepth` converts back for placement, so the geometry stays
+  canonical.
+- **`cf`, not `cu ft` or `ft³`.** It is what a shop means by an 80, it is two
+  characters in a column a corner badge gives 130px to, and the superscript is
+  the one glyph `SlateFont`'s character-count estimate could not be trusted for.
+  Consumption gets two decimals in cf/min against one in L/min, because the
+  imperial figure is around 0.6 and one decimal rounds too many real dives
+  together.
+- **A three-digit depth is exactly the change that fits Wide and collides at
+  Watch.** The figures share the width in equal columns, so the imperial
+  cross-product is rendered in `SlateUnitsTest` and the largest emitted text
+  measured — the same guard, and for the same reason, as the one that caught a
+  style undercutting its layout.
 
 ## Exporting several dives at once
 
@@ -778,7 +880,8 @@ Two smaller things that were got wrong once each:
   summary; depth is the only thing mapped to vertical space.
 - The depth axis always starts at the surface.
 - Slate figures round **up** — 44.4 m is a 45 m dive (`ceilMetres`,
-  `ceilMinutes`).
+  `ceilMinutes`), and in feet the conversion comes first: 146 ft, not 148
+  (`ceilFeet`, `ceilDepth`).
 
 ## History worth knowing
 

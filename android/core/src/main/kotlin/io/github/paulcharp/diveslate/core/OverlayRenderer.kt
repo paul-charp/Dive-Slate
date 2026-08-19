@@ -1,6 +1,5 @@
 package io.github.paulcharp.diveslate.core
 
-import java.util.Locale
 import kotlin.math.roundToInt
 
 /**
@@ -39,6 +38,15 @@ data class OverlayOptions(
     val layout: SlateLayout = SlateLayout.WIDE,
     /** The palette. Must be one [style] offers — see [SlateStyle.themes]. */
     val theme: SlateTheme = SLATE,
+    /**
+     * Which units the figures are printed in.
+     *
+     * A property of the reader, not of the log: the parsers normalise feet and
+     * Fahrenheit to metres and Celsius on the way in whatever the exporting
+     * computer was set to, so this is the only place the choice is made. See
+     * [SlateUnits].
+     */
+    val units: SlateUnits = SlateUnits.METRIC,
     val showScrim: Boolean = true,
     val showSite: Boolean = true,
     val showDate: Boolean = false,
@@ -123,42 +131,61 @@ data class SlateStat(val label: String, val value: String, val unit: String)
  * A candidate the log cannot answer returns null and is skipped, never shown
  * blank — the slate states what the dive recorded, and an empty slot inviting
  * the reader to assume a zero is worse than one fewer number.
+ *
+ * Every builder takes the units rather than converting after the fact, because
+ * a figure is a value *and* the unit it is labelled with, and the rounding
+ * belongs to whichever of the two is being printed — see [ceilFeet]. Which
+ * figures exist does not depend on the units, which is why [availableStats] can
+ * ask in metric and answer for both.
  */
-private val STAT_BUILDERS: Map<String, (Dive) -> SlateStat?> = mapOf(
-    "depth" to { d -> SlateStat("Max depth", ceilMetres(d.computedMaxDepthMetres).toString(), "m") },
-    "time" to { d ->
+private val STAT_BUILDERS: Map<String, (Dive, SlateUnits) -> SlateStat?> = mapOf(
+    "depth" to { d, u ->
+        val (value, unit) = depthFigure(d.computedMaxDepthMetres, u)
+        SlateStat("Max depth", value, unit)
+    },
+    "time" to { d, _ ->
         val (value, unit) = formatMinutes(d.computedDurationSeconds)
         SlateStat("Runtime", value, unit)
     },
-    "avg" to { d ->
-        d.computedMeanDepthMetres?.let { SlateStat("Avg depth", ceilMetres(it).toString(), "m") }
-    },
-    "temp" to { d ->
-        val range = d.temperatureRangeCelsius
-        when {
-            range != null -> SlateStat("Temp", range.first.roundToInt().toString(), "°C")
-            d.waterTempCelsius != null && d.waterTempCelsius != 0.0 ->
-                SlateStat("Temp", d.waterTempCelsius.roundToInt().toString(), "°C")
-            else -> null
+    "avg" to { d, u ->
+        d.computedMeanDepthMetres?.let {
+            val (value, unit) = depthFigure(it, u)
+            SlateStat("Avg depth", value, unit)
         }
     },
-    "deco" to { d ->
+    "temp" to { d, u ->
+        val celsius = d.temperatureRangeCelsius?.first
+            ?: d.waterTempCelsius?.takeIf { it != 0.0 }
+        celsius?.let {
+            val (value, unit) = temperatureFigure(it, u)
+            SlateStat("Temp", value, unit)
+        }
+    },
+    "deco" to { d, _ ->
         d.decoTimeSeconds()?.let {
             val (value, unit) = formatMinutes(it)
             SlateStat("Deco", value, unit)
         }
     },
-    "gf" to { d -> d.gradientFactors?.let { SlateStat("GF", "${it.first}/${it.second}", "") } },
-    "used" to { d -> d.gasUsedLitres?.let { SlateStat("Gas used", it.roundToInt().toString(), "L") } },
-    "sac" to { d ->
-        d.sacLitresPerMin?.let { SlateStat("SAC", String.format(Locale.ENGLISH, "%.1f", it), "L/min") }
+    "gf" to { d, _ -> d.gradientFactors?.let { SlateStat("GF", "${it.first}/${it.second}", "") } },
+    "used" to { d, u ->
+        d.gasUsedLitres?.let {
+            val (value, unit) = volumeFigure(it, u)
+            SlateStat("Gas used", value, unit)
+        }
     },
-    "cns" to { d -> d.cns?.let { SlateStat("CNS", (it * 100).roundToInt().toString(), "%") } },
+    "sac" to { d, u ->
+        d.sacLitresPerMin?.let {
+            val (value, unit) = consumptionFigure(it, u)
+            SlateStat("SAC", value, unit)
+        }
+    },
+    "cns" to { d, _ -> d.cns?.let { SlateStat("CNS", (it * 100).roundToInt().toString(), "%") } },
     // "Gases", comma-separated. Diverges from the Python, which labels this
     // "Gas" and joins with "/" — a slash reads as a ratio next to figures like
     // GF 70/80, and Tx18/45 already contains one, so "Tx18/45/O2" parses wrong
     // at a glance. Do not "restore" parity here.
-    "gas" to { d ->
+    "gas" to { d, _ ->
         if (d.gasSwitches.isEmpty()) null
         else SlateStat("Gases", d.gasSwitches.map { it.gas.name }.distinct().joinToString(", "), "")
     },
@@ -181,7 +208,9 @@ val STAT_KEYS: List<String> = STAT_BUILDERS.keys.toList()
  * figures. Fine once per selection; not something to call per frame.
  */
 fun availableStats(dive: Dive): Set<String> =
-    STAT_BUILDERS.filterValues { it(dive) != null }.keys
+    // In metric, and the answer holds for both: the units decide how a figure
+    // is printed, never whether the log can supply it.
+    STAT_BUILDERS.filterValues { it(dive, SlateUnits.METRIC) != null }.keys
 
 /**
  * The figures this slate shows, in order.
@@ -199,8 +228,8 @@ fun availableStats(dive: Dive): Set<String> =
  */
 internal fun resolveStats(dive: Dive, options: OverlayOptions): List<SlateStat> {
     val budget = minOf(options.maxStats, options.layout.maxFigures)
-    val chosen = options.stats?.let { namedStats(dive, it) }
-        ?: autoStats(dive, budget, allowDeco = options.showDeco)
+    val chosen = options.stats?.let { namedStats(dive, it, options.units) }
+        ?: autoStats(dive, budget, allowDeco = options.showDeco, units = options.units)
     return chosen.take(budget)
 }
 
@@ -214,29 +243,39 @@ internal fun resolveStats(dive: Dive, options: OverlayOptions): List<SlateStat> 
  * with how the dive was run, whereas water temperature is a property of the site
  * that day.
  */
-private fun autoStats(dive: Dive, limit: Int, allowDeco: Boolean): List<SlateStat> {
+private fun autoStats(
+    dive: Dive,
+    limit: Int,
+    allowDeco: Boolean,
+    units: SlateUnits,
+): List<SlateStat> {
+    val (depth, depthUnit) = depthFigure(dive.computedMaxDepthMetres, units)
     val (runtime, runtimeUnit) = formatMinutes(dive.computedDurationSeconds)
     val chosen = mutableListOf(
-        SlateStat("Max depth", ceilMetres(dive.computedMaxDepthMetres).toString(), "m"),
+        SlateStat("Max depth", depth, depthUnit),
         SlateStat("Runtime", runtime, runtimeUnit),
     )
 
     val order = listOfNotNull(if (allowDeco) "deco" else null, "gf", "used", "temp", "gas")
     for (key in order) {
         if (chosen.size >= limit) break
-        STAT_BUILDERS.getValue(key)(dive)?.let { chosen.add(it) }
+        STAT_BUILDERS.getValue(key)(dive, units)?.let { chosen.add(it) }
     }
     return chosen.take(limit)
 }
 
-private fun namedStats(dive: Dive, keys: List<String>): List<SlateStat> = keys.mapNotNull { key ->
+private fun namedStats(
+    dive: Dive,
+    keys: List<String>,
+    units: SlateUnits,
+): List<SlateStat> = keys.mapNotNull { key ->
     val builder = STAT_BUILDERS[key]
         ?: throw IllegalArgumentException(
             "unknown stat '$key'; available: ${STAT_KEYS.joinToString()}"
         )
     // Silently skip a stat the log cannot supply: asking for temperature on a
     // computer that never recorded it should not blank the whole slate.
-    builder(dive)
+    builder(dive, units)
 }
 
 /**

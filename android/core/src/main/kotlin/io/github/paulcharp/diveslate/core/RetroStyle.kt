@@ -26,11 +26,22 @@ object RetroStyle : SlateStyle {
 
     override val id: String = "retro"
 
-    // The one style whose profile is not smoothed, and it needs no flag to say
-    // so: the segment screen resamples to one minute and one metre and draws
-    // its own steps, so it never goes through profileTrace at all. That
-    // quantisation *is* the style — a curve through a staircase is a staircase
-    // with rounded corners, which reads as neither.
+    /**
+     * The one style whose profile is not smoothed.
+     *
+     * The segment screen resamples to one minute and one metre and draws its
+     * own steps, so it never goes through `profileTrace` at all — that
+     * quantisation *is* the style, and a curve through a staircase is a
+     * staircase with rounded corners, which reads as neither.
+     *
+     * Said out loud rather than left implicit, which it was until a test asked.
+     * Ignoring the flag is not the same as declaring it: the UI reads this to
+     * decide whether to offer the control, so while this was silently true the
+     * chip was drawn here and did nothing when pressed — the exact failure the
+     * flag exists to prevent, and the same rule the dive list applies to a row
+     * it cannot draw.
+     */
+    override val supportsSmooth: Boolean = false
 
     override val label: String = "Dive computer"
 

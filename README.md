@@ -35,6 +35,10 @@ video frame or a story and the shot still shows through.
   colour-blind separation and contrast — not eyeballed.
 - 📐 **Nothing invented.** A figure your log cannot answer is left off rather
   than guessed at.
+- 📏 **Metric or imperial.** Feet and Fahrenheit are your choice, not your dive
+  computer's — a log written either way prints either way.
+- 💾 **It remembers.** Settle on a look, save it as your default, and every dive
+  you share in opens that way.
 - 📶 **Works offline.** The only thing it ever asks the network is whether a
   newer release exists.
 
@@ -175,8 +179,14 @@ offers at least one dark and one light palette, and switching style keeps
 whichever you had: that choice is about the footage the slate lands on, which
 the incoming style knows nothing about.
 
-Also adjustable: which elements appear, which figures are shown, and the scrim
-panel's opacity.
+Also adjustable: **metric or imperial**, which elements appear, which figures are
+shown, and the scrim panel's opacity.
+
+Once it looks right, **Save as default** — every dive you open after that starts
+there. **Restore default** undoes an afternoon's fiddling, and **Factory reset**
+goes back to the shipped look and forgets the saved one. Nothing is saved behind
+your back: the controls are a scratchpad for the dive in front of you until you
+say otherwise.
 
 <details>
 <summary><strong>Why the opacity slider only moves the panel</strong></summary>
@@ -414,9 +424,6 @@ apps — so the export is the only route in, not a workaround.
 
 ## Known gaps
 
-- Settings do not persist across launches: style, layout, palette, opacity and
-  figure choices reset every time. They do hold across a batch and across
-  stepping between dives — it is only leaving the editor that forgets them.
 - No background-media picker, so the palette cannot yet be judged against your
   own footage — only against the checkerboard.
 - No library. Every incoming log is already copied to `filesDir/logs/`, and
@@ -435,7 +442,8 @@ in `android/local.properties`. The wrapper fetches its own Gradle. Android Studi
 is **not** required; it is only needed for the IDE and the emulator GUI.
 
 ```bash
-cd android && ./gradlew core:test          # 68 tests, no device
+cd android && ./gradlew core:test              # 87 tests, no device
+cd android && ./gradlew :app:testDebugUnitTest # 30 more, also no device
 cd android && ./gradlew :app:assembleRelease
 ```
 

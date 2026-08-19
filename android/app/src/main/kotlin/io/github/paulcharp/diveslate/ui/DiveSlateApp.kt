@@ -48,6 +48,7 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -82,10 +83,11 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -106,18 +108,19 @@ import androidx.core.net.toUri
 import io.github.paulcharp.diveslate.BuildConfig
 import io.github.paulcharp.diveslate.ExportRequest
 import io.github.paulcharp.diveslate.SlatePainter
+import io.github.paulcharp.diveslate.SlateSettings
 import io.github.paulcharp.diveslate.UpdateCheck
 import io.github.paulcharp.diveslate.core.Dive
 import io.github.paulcharp.diveslate.core.DiveLog
-import io.github.paulcharp.diveslate.core.OverlayOptions
 import io.github.paulcharp.diveslate.core.SLATE_STYLES
 import io.github.paulcharp.diveslate.core.Slate
 import io.github.paulcharp.diveslate.core.SlateLayout
 import io.github.paulcharp.diveslate.core.SlateStyle
 import io.github.paulcharp.diveslate.core.SlateTheme
+import io.github.paulcharp.diveslate.core.SlateUnits
 import io.github.paulcharp.diveslate.core.adopt
 import io.github.paulcharp.diveslate.core.availableStats
-import io.github.paulcharp.diveslate.core.ceilMetres
+import io.github.paulcharp.diveslate.core.depthFigure
 import io.github.paulcharp.diveslate.core.formatMinutes
 import io.github.paulcharp.diveslate.core.renderOverlay
 import java.io.File
@@ -162,6 +165,30 @@ fun LoadState.withMessage(message: String): LoadState = when (this) {
 
 /** A dive addressed by the file it came from and its position within that file. */
 data class DiveRef(val log: Int, val dive: Int)
+
+/**
+ * How a set of references survives a rotation.
+ *
+ * Two ints per reference in one flat list, because what the framework can save
+ * is a primitive or a Parcelable and a `data class` is neither. Which dives are
+ * open or ticked is part of where the user is: dropping it on a rotation put
+ * them back on the list with a selection they had spent a minute making gone.
+ */
+private fun flatten(refs: Collection<DiveRef>): List<Int> =
+    refs.flatMap { listOf(it.log, it.dive) }
+
+private fun unflatten(saved: List<Int>): List<DiveRef> =
+    saved.chunked(2).mapNotNull { pair ->
+        if (pair.size == 2) DiveRef(pair[0], pair[1]) else null
+    }
+
+// ArrayList explicitly: what the framework can put in a Bundle is a concrete
+// list type, not the List interface.
+private val DiveRefListSaver: Saver<List<DiveRef>, ArrayList<Int>> =
+    Saver(save = { ArrayList(flatten(it)) }, restore = { unflatten(it) })
+
+private val DiveRefSetSaver: Saver<Set<DiveRef>, ArrayList<Int>> =
+    Saver(save = { ArrayList(flatten(it)) }, restore = { unflatten(it).toSet() })
 
 /** How many dives are open, across every file. */
 val LoadState.Loaded.diveCount: Int get() = logs.sumOf { it.size }
@@ -411,7 +438,15 @@ private val Caution: Color
  */
 private val PICKER_TYPES = arrayOf("*/*")
 
-private val STAT_LABELS = listOf(
+/**
+ * What each figure is called in the picker.
+ *
+ * The *order* is not here: it is [SlateSettings.STAT_ORDER], which is the order
+ * the slate prints them in and therefore the order a set trimmed to a layout's
+ * budget keeps. Two lists would be two orders to keep in step, and the one that
+ * drifted would be the one deciding which figure a corner badge drops.
+ */
+private val STAT_LABELS: Map<String, String> = mapOf(
     "depth" to "Depth",
     "time" to "Runtime",
     "deco" to "Deco",
@@ -425,21 +460,25 @@ private val STAT_LABELS = listOf(
 )
 
 /**
- * The chosen figures cut to [budget], keeping the ones that read first.
+ * [settings] is hoisted out of the editor entirely.
  *
- * In the order [STAT_LABELS] lists them, which is the order the slate prints
- * them in — so trimming takes off the tail the user would have seen last rather
- * than whichever entries a set happens to iterate late.
+ * It used to be a dozen `remember`ed values inside [Editor], which made the
+ * chosen look a property of one composition: a rotation reset it, backing out
+ * to the list and opening another dive reset it, and every launch started from
+ * the shipped defaults again. It lives in the session now, and reaches the disk
+ * only when the user saves it as their default — see [SlateSettings].
  */
-private fun Set<String>.trimmedTo(budget: Int): Set<String> =
-    if (size <= budget) this
-    else STAT_LABELS.map { it.first }.filter { it in this }.take(budget).toSet()
-
 @Composable
 fun DiveSlateApp(
     state: LoadState,
+    settings: SlateSettings,
+    savedDefault: SlateSettings?,
     updates: Updates,
     exports: ExportState,
+    onSettings: (SlateSettings) -> Unit,
+    onSaveDefault: () -> Unit,
+    onRestoreDefault: () -> Unit,
+    onRestoreFactory: () -> Unit,
     onLoadSample: () -> Unit,
     onOpenUris: (List<Uri>) -> Unit,
     onBack: () -> Unit,
@@ -464,7 +503,9 @@ fun DiveSlateApp(
         // What the editor is currently showing. Empty means the list; one ref
         // is the ordinary single-dive edit; several is a batch. Reset whenever
         // a different set of files is loaded, since the refs address those.
-        var editing by remember(loaded?.logs) { mutableStateOf<List<DiveRef>>(emptyList()) }
+        var editing by rememberSaveable(loaded?.logs, stateSaver = DiveRefListSaver) {
+            mutableStateOf<List<DiveRef>>(emptyList())
+        }
         // Invariant: a non-empty [selection] implies [selecting]. The list reads
         // the two in different places — the row tint follows the selection, the
         // top bar and the dots and the action bar follow the mode — so breaking
@@ -472,8 +513,10 @@ fun DiveSlateApp(
         // with rows visibly highlighted and no control anywhere that admits it.
         // Every site that clears one clears the other; see [onOpenSelection] for
         // the one that used to not.
-        var selection by remember(loaded?.logs) { mutableStateOf<Set<DiveRef>>(emptySet()) }
-        var selecting by remember(loaded?.logs) { mutableStateOf(false) }
+        var selection by rememberSaveable(loaded?.logs, stateSaver = DiveRefSetSaver) {
+            mutableStateOf<Set<DiveRef>>(emptySet())
+        }
+        var selecting by rememberSaveable(loaded?.logs) { mutableStateOf(false) }
 
         // Back steps out one screen at a time — editor to list, selection to
         // list, list to start — rather than leaving the app from wherever you
@@ -513,6 +556,7 @@ fun DiveSlateApp(
                         DiveList(
                             state = state,
                             order = order,
+                            units = settings.units,
                             selection = selection,
                             selecting = selecting,
                             onBack = onBack,
@@ -547,6 +591,12 @@ fun DiveSlateApp(
                         Editor(
                             state = state,
                             refs = open,
+                            settings = settings,
+                            savedDefault = savedDefault,
+                            onSettings = onSettings,
+                            onSaveDefault = onSaveDefault,
+                            onRestoreDefault = onRestoreDefault,
+                            onRestoreFactory = onRestoreFactory,
                             exports = exports,
                             onBack = {
                                 if (single) onBack() else editing = emptyList()
@@ -853,6 +903,12 @@ private fun Problem(message: String, onBack: () -> Unit, onPickFile: () -> Unit)
 private fun DiveList(
     state: LoadState.Loaded,
     order: List<DiveRef>,
+    /**
+     * Only for the depth on each row. The list quotes the same units the slate
+     * will print, so the number someone picks a dive by is the number they are
+     * about to export.
+     */
+    units: SlateUnits,
     selection: Set<DiveRef>,
     selecting: Boolean,
     onBack: () -> Unit,
@@ -977,6 +1033,7 @@ private fun DiveList(
                     if (dive != null) {
                         DiveRow(
                             dive = dive,
+                            units = units,
                             selected = ref in selection,
                             selecting = selecting,
                             blocked = dive.blockedReason(),
@@ -1069,13 +1126,14 @@ private const val LARGE_BATCH = 12
 @Composable
 private fun DiveRow(
     dive: Dive,
+    units: SlateUnits,
     selected: Boolean,
     selecting: Boolean,
     blocked: String?,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
 ) {
-    val depth = ceilMetres(dive.computedMaxDepthMetres)
+    val (depth, depthUnit) = depthFigure(dive.computedMaxDepthMetres, units)
     val (runtime, unit) = formatMinutes(dive.computedDurationSeconds)
 
     Row(
@@ -1124,7 +1182,11 @@ private fun DiveRow(
                 }
                 // Depth and runtime: the two numbers that identify a dive at a
                 // glance, and the same two the slate leads with.
-                Text("$depth m · $runtime $unit".trim(), color = faint, fontSize = 13.sp)
+                Text(
+                    "$depth $depthUnit · $runtime $unit".trim(),
+                    color = faint,
+                    fontSize = 13.sp,
+                )
                 // Only when a site named the row. Without one the title already
                 // falls back to "#9 · 2026-08-16", and repeating the number under
                 // it says nothing.
@@ -1197,6 +1259,12 @@ private val LIST_DATE: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM yy
 private fun Editor(
     state: LoadState.Loaded,
     refs: List<DiveRef>,
+    settings: SlateSettings,
+    savedDefault: SlateSettings?,
+    onSettings: (SlateSettings) -> Unit,
+    onSaveDefault: () -> Unit,
+    onRestoreDefault: () -> Unit,
+    onRestoreFactory: () -> Unit,
     exports: ExportState,
     onBack: () -> Unit,
     onExport: (ExportRequest) -> Unit,
@@ -1204,38 +1272,25 @@ private fun Editor(
 ) {
     val dives = remember(refs, state.logs) { refs.mapNotNull { state.dive(it) } }
 
-    // The three axes the slate is chosen along, in the order they narrow: the
-    // style decides how it is drawn and therefore which palettes exist, the
-    // layout decides its proportions, the theme decides its colour.
-    val initialStyle = SLATE_STYLES.first()
-    var style by remember { mutableStateOf(initialStyle) }
-    var layout by remember { mutableStateOf(SlateLayout.WIDE) }
-    var theme by remember { mutableStateOf(initialStyle.defaultTheme) }
+    // Every one of these was a `remember` here until the settings were hoisted
+    // into the session. Read-only now: each control sends the whole object back
+    // changed, which is also what makes "save this as my default" a single
+    // value to store rather than a dozen to gather up.
+    val style = settings.style
+    val layout = settings.layout
+    val theme = settings.theme
+    val chosenStats = settings.stats
 
-    var showBackdrop by remember { mutableStateOf(true) }
-    var opacity by remember { mutableFloatStateOf(initialStyle.defaultScrimAlpha) }
-
-    var showSite by remember { mutableStateOf(true) }
-    var showDate by remember { mutableStateOf(false) }
-    var showScrim by remember { mutableStateOf(true) }
-    var showCeiling by remember { mutableStateOf(true) }
-    var showGas by remember { mutableStateOf(false) }
-    // On by default, and it stays wherever the user leaves it.
-    //
-    // A dive profile is a curve in the water; the polyline is the sampling
-    // artefact. So the curve is the truer of the two pictures and leads, and the
-    // control is here for a reader who wants every tooth of a sawtooth bottom
-    // rather than a line through them. Carried across a style change like the
-    // palette's dark/light choice, because it is a statement about how this
-    // slate should read and the incoming style knows nothing about it.
-    var smooth by remember { mutableStateOf(true) }
-    var chosenStats by remember { mutableStateOf(emptySet<String>()) }
+    /** One control changed, with the cross-axis rules re-applied. */
+    fun update(change: SlateSettings.() -> SlateSettings) {
+        onSettings(settings.change().normalised())
+    }
 
     // Which of the selection is on screen. Deliberately outside every setting
     // above it: stepping to the next dive must not disturb a palette or a
     // figure choice, since the whole reason to hold several dives open at once
     // is to settle those choices against all of them.
-    var shown by remember(refs) { mutableIntStateOf(0) }
+    var shown by rememberSaveable(refs) { mutableIntStateOf(0) }
 
     // An empty selection is rejected before the editor opens, but a crash here
     // would be a blank screen with no way back.
@@ -1259,28 +1314,7 @@ private fun Editor(
     // the very same object. Two constructions could drift apart, and a slate
     // that exports differently from the one on screen is the one failure this
     // screen cannot afford.
-    val options = remember(
-        style, layout, theme, opacity, minOpacity, showScrim, showSite, showDate,
-        showCeiling, showGas, smooth, chosenStats,
-    ) {
-        OverlayOptions(
-            style = style,
-            layout = layout,
-            theme = theme,
-            scrimAlpha = opacity.coerceAtLeast(minOpacity),
-            showScrim = showScrim,
-            showSite = showSite,
-            showDate = showDate,
-            showCeiling = showCeiling,
-            showGas = showGas,
-            // Ignored by a style that cannot honour it, which is also the one
-            // that hides the control — so the flag can never disagree with what
-            // is on screen.
-            smoothProfile = smooth && style.supportsSmooth,
-            stats = chosenStats.takeIf { it.isNotEmpty() }
-                ?.let { picked -> STAT_LABELS.map { it.first }.filter { it in picked } },
-        )
-    }
+    val options = remember(settings) { settings.toOptions() }
 
     val slate = remember(dive, options) {
         runCatching { renderOverlay(dive, options) }.getOrNull()
@@ -1319,7 +1353,7 @@ private fun Editor(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-        Preview(slate = slate, showBackdrop = showBackdrop)
+        Preview(slate = slate, showBackdrop = settings.showBackdrop)
 
         // Under the thing it pages, the way a carousel control sits under a
         // carousel. In the top bar it would be a long reach from the preview it
@@ -1345,12 +1379,12 @@ private fun Editor(
         // is drawn and therefore which palettes are even on offer below.
         Label("Style")
         StylePicker(selected = style) { candidate ->
-            style = candidate
-            // The palette follows the style rather than resetting: the
-            // dark/light choice is a statement about the footage this slate
-            // will land on, which the new style knows nothing about.
-            theme = candidate.adopt(theme)
-            opacity = opacity.coerceAtLeast(theme.scrimAlphaMin)
+            // The palette follows the style rather than resetting, and the
+            // opacity floor follows the palette. Both are [SlateSettings.
+            // normalised]'s job now — adopt keeps the dark/light choice, which
+            // is a statement about the footage this slate will land on and
+            // which the incoming style knows nothing about.
+            update { copy(style = candidate, theme = candidate.adopt(theme)) }
         }
 
         // ---- layout ---------------------------------------------------------
@@ -1362,14 +1396,12 @@ private fun Editor(
             SlateLayout.entries.forEachIndexed { index, candidate ->
                 SegmentedButton(
                     selected = candidate == layout,
-                    onClick = {
-                        layout = candidate
-                        // Trim visibly, here, rather than letting the renderer
-                        // drop the overflow: the figures deselect in front of
-                        // the user, so a narrower badge showing fewer of them is
-                        // something they watched happen.
-                        chosenStats = chosenStats.trimmedTo(candidate.maxFigures)
-                    },
+                    // The figure budget is trimmed by [SlateSettings.normalised]
+                    // as part of the change, and it happens visibly here rather
+                    // than in the renderer: the chips deselect in front of the
+                    // user, so a narrower badge carrying fewer figures is
+                    // something they watched happen.
+                    onClick = { update { copy(layout = candidate) } },
                     shape = SegmentedButtonDefaults.itemShape(index, SlateLayout.entries.size),
                     label = { Text(candidate.label, maxLines = 1) },
                 )
@@ -1391,36 +1423,54 @@ private fun Editor(
             style.themes.sortedByDescending { it.isDark }
         }
         Label("Palette")
-        PaletteRow(palettes, theme) { picked ->
-            theme = picked
-            opacity = opacity.coerceAtLeast(picked.scrimAlphaMin)
+        PaletteRow(palettes, theme) { picked -> update { copy(theme = picked) } }
+
+        // ---- units ----------------------------------------------------------
+        // A property of the reader, not of the log: the parsers normalise feet
+        // and Fahrenheit to metres and Celsius whatever the exporting computer
+        // was set to, so a log written either way can be printed either way.
+        // Both systems at once is not offered — a slate mixing feet with litres
+        // is a set of numbers nobody's training pairs.
+        Label("Units")
+        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+            SlateUnits.entries.forEachIndexed { index, candidate ->
+                SegmentedButton(
+                    selected = candidate == settings.units,
+                    onClick = { update { copy(units = candidate) } },
+                    shape = SegmentedButtonDefaults.itemShape(index, SlateUnits.entries.size),
+                    label = { Text(candidate.label, maxLines = 1) },
+                )
+            }
         }
 
         // ---- panel opacity --------------------------------------------------
-        Label("Panel opacity  ${(opacity.coerceIn(minOpacity, 1f) * 100).toInt()}%")
+        Label("Panel opacity  ${(settings.scrimAlpha.coerceIn(minOpacity, 1f) * 100).toInt()}%")
         Slider(
-            value = opacity.coerceIn(minOpacity, 1f),
-            onValueChange = { opacity = it },
+            value = settings.scrimAlpha.coerceIn(minOpacity, 1f),
+            onValueChange = { value -> update { copy(scrimAlpha = value) } },
             // The floor is where ink stops clearing 4.5:1 against the worst
             // possible backdrop. Below it the panel has stopped working and the
             // halo is carrying the text alone, which is not enough over video.
             valueRange = minOpacity..1f,
-            enabled = showScrim,
+            enabled = settings.showScrim,
         )
 
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Switch(checked = showBackdrop, onCheckedChange = { showBackdrop = it })
+            Switch(
+                checked = settings.showBackdrop,
+                onCheckedChange = { on -> update { copy(showBackdrop = on) } },
+            )
             Text("  Checkerboard backdrop", color = Muted, fontSize = 14.sp)
         }
 
         // ---- elements -------------------------------------------------------
         Label("Elements")
         ChipRow {
-            Toggle("Site", showSite) { showSite = it }
-            Toggle("Date", showDate) { showDate = it }
-            Toggle("Panel", showScrim) { showScrim = it }
-            Toggle("Ceiling", showCeiling) { showCeiling = it }
-            Toggle("Gas switches", showGas) { showGas = it }
+            Toggle("Site", settings.showSite) { on -> update { copy(showSite = on) } }
+            Toggle("Date", settings.showDate) { on -> update { copy(showDate = on) } }
+            Toggle("Panel", settings.showScrim) { on -> update { copy(showScrim = on) } }
+            Toggle("Ceiling", settings.showCeiling) { on -> update { copy(showCeiling = on) } }
+            Toggle("Gas switches", settings.showGas) { on -> update { copy(showGas = on) } }
             // Absent rather than greyed on the one style that cannot honour it.
             // The segment screen quantises the profile to one minute and one
             // metre, and a curve through a staircase is a staircase with
@@ -1428,7 +1478,7 @@ private fun Editor(
             // not offered. Same rule as a dive row that refuses selection
             // instead of being selected and then dropped.
             if (style.supportsSmooth) {
-                Toggle("Smooth curve", smooth) { smooth = it }
+                Toggle("Smooth curve", settings.smooth) { on -> update { copy(smooth = on) } }
             }
         }
 
@@ -1441,10 +1491,10 @@ private fun Editor(
         ChipRow {
             FilterChip(
                 selected = chosenStats.isEmpty(),
-                onClick = { chosenStats = emptySet() },
+                onClick = { update { copy(stats = emptySet()) } },
                 label = { Text("Auto", fontSize = 12.sp) },
             )
-            STAT_LABELS.forEach { (key, label) ->
+            SlateSettings.STAT_ORDER.forEach { key ->
                 val picked = key in chosenStats
                 FilterChip(
                     selected = picked,
@@ -1453,9 +1503,11 @@ private fun Editor(
                     // badge carries is a choice, so it is theirs to unmake.
                     enabled = picked || chosenStats.size < figureBudget,
                     onClick = {
-                        chosenStats = if (picked) chosenStats - key else chosenStats + key
+                        update {
+                            copy(stats = if (picked) stats - key else stats + key)
+                        }
                     },
-                    label = { Text(label, fontSize = 12.sp) },
+                    label = { Text(STAT_LABELS[key] ?: key, fontSize = 12.sp) },
                 )
             }
         }
@@ -1497,6 +1549,16 @@ private fun Editor(
                 fontSize = 12.sp,
             )
         }
+
+        // ---- defaults -------------------------------------------------------
+        // Under everything it covers, because it is about all of it.
+        Defaults(
+            settings = settings,
+            saved = savedDefault,
+            onSave = onSaveDefault,
+            onRestore = onRestoreDefault,
+            onFactory = onRestoreFactory,
+        )
 
         // ---- export ---------------------------------------------------------
         // Saving leads. The PNG is what this project actually produces, and the
@@ -1676,7 +1738,8 @@ private fun DiveSwitcher(position: Int, count: Int, onStep: (Int) -> Unit) {
 private fun figureGaps(dives: List<Dive>, chosen: Set<String>): List<String> {
     if (dives.size < 2 || chosen.isEmpty()) return emptyList()
     val available = dives.map { availableStats(it) }
-    return STAT_LABELS.filter { it.first in chosen }.mapNotNull { (key, label) ->
+    return SlateSettings.STAT_ORDER.filter { it in chosen }.mapNotNull { key ->
+        val label = STAT_LABELS[key] ?: key
         val missing = available.count { key !in it }
         // "of ${dives.size}" rather than a bare count, so the number is read as
         // a share of the batch rather than as a total the user has to place.
@@ -1830,6 +1893,80 @@ private fun Toggle(label: String, checked: Boolean, onChange: (Boolean) -> Unit)
         onClick = { onChange(!checked) },
         label = { Text(label, fontSize = 12.sp) },
     )
+}
+
+/**
+ * Saving the look, and the two ways back.
+ *
+ * Saving is explicit rather than every change being persisted as it is made.
+ * The controls above are a scratchpad for the dive in front of you — a palette
+ * tried against one photo, a layout tried for one story — and quietly promoting
+ * the last thing tried to the thing you always get is how a remembered default
+ * becomes a surprise.
+ *
+ * The two restores are different questions and both are worth having:
+ *
+ * * **Restore default** puts back what was saved, and is the way out of ten
+ *   minutes of fiddling. Offered only when there is something to go back to and
+ *   the current look actually differs from it, since a button that would change
+ *   nothing is one that says nothing about what it does.
+ * * **Factory reset** goes back to what the app shipped with *and forgets the
+ *   saved default*, because a factory reset that left the saved look in place
+ *   would put it back on the next launch — exactly the state someone reaching
+ *   for that button is trying to leave. It confirms first, for the same reason:
+ *   it is the one control here that discards something the user made.
+ */
+@Composable
+private fun Defaults(
+    settings: SlateSettings,
+    saved: SlateSettings?,
+    onSave: () -> Unit,
+    onRestore: () -> Unit,
+    onFactory: () -> Unit,
+) {
+    var confirming by rememberSaveable { mutableStateOf(false) }
+
+    Label("Defaults")
+    ChipRow {
+        FilledTonalButton(onClick = onSave) { Text("Save as default") }
+        TextButton(onClick = onRestore, enabled = saved != null && saved != settings) {
+            Text("Restore default")
+        }
+        TextButton(onClick = { confirming = true }) { Text("Factory reset") }
+    }
+    Text(
+        when {
+            saved == null ->
+                "New dives open with the shipped look until you save one of your own."
+            saved == settings -> "New dives open with this look."
+            else -> "Saved. What you have changed since applies to this session only."
+        },
+        color = Muted,
+        fontSize = 12.sp,
+    )
+
+    if (confirming) {
+        AlertDialog(
+            onDismissRequest = { confirming = false },
+            title = { Text("Reset to the shipped look?") },
+            text = {
+                Text(
+                    if (saved == null) {
+                        "Every control goes back to what Dive Slate ships with."
+                    } else {
+                        "Every control goes back to what Dive Slate ships with, and " +
+                            "your saved default is forgotten."
+                    }
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { confirming = false; onFactory() }) { Text("Reset") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirming = false }) { Text("Cancel") }
+            },
+        )
+    }
 }
 
 /**

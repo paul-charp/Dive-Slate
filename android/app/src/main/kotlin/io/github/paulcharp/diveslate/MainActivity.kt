@@ -9,12 +9,11 @@ import android.os.Bundle
 import android.provider.OpenableColumns
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.viewModels
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.lifecycle.lifecycleScope
+import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.viewModelScope
 import io.github.paulcharp.diveslate.core.DiveLog
 import io.github.paulcharp.diveslate.core.ParseException
 import io.github.paulcharp.diveslate.core.parseText
@@ -42,9 +41,33 @@ import java.io.File
  */
 class MainActivity : ComponentActivity() {
 
-    private var state by mutableStateOf<LoadState>(LoadState.Empty)
-    private var updateState by mutableStateOf<UpdateState>(UpdateState.Idle)
-    private var exportState by mutableStateOf<ExportState>(ExportState.Idle)
+    /**
+     * Everything the app is in the middle of, kept out of the activity.
+     *
+     * Held in a ViewModel because an activity is destroyed and rebuilt by every
+     * configuration change: with these as fields, rotating the phone put the
+     * user back on the start screen with the open dive log gone. See
+     * [SessionState] — the coroutines below run on its scope for the same
+     * reason, so an export in progress survives the same rotation.
+     */
+    private val session: SessionState by viewModels()
+
+    /**
+     * The three states below read and write [session]. Kept as properties so
+     * the methods in this file — which is otherwise unchanged by where the
+     * state lives — still read as they did.
+     */
+    private var state: LoadState
+        get() = session.logs
+        set(value) { session.logs = value }
+
+    private var updateState: UpdateState
+        get() = session.updates
+        set(value) { session.updates = value }
+
+    private var exportState: ExportState
+        get() = session.exports
+        set(value) { session.exports = value }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -67,14 +90,41 @@ class MainActivity : ComponentActivity() {
         // Guarded, and before setContent: an unexpected intent must not kill
         // the activity before there is a screen on which to say so. A share
         // that launches nothing looks identical to a share that did nothing.
-        runCatching { handleIntent(intent) }.onFailure {
-            state = LoadState.Failed(
-                "Could not open that share: ${it.message ?: it::class.simpleName}"
-            )
+        //
+        // Once per intent, not once per activity. A rotation rebuilds the
+        // activity with the same intent still attached, and reading it again
+        // would parse the shared file a second time and list every dive twice.
+        if (!session.handledIntent) {
+            session.handledIntent = true
+            runCatching { handleIntent(intent) }.onFailure {
+                state = LoadState.Failed(
+                    "Could not open that share: ${it.message ?: it::class.simpleName}"
+                )
+            }
         }
         setContent {
+            // The chooser and the installer are produced by work that outlives
+            // this activity, so they are parked in the session and launched
+            // from whichever activity is on screen when they turn up.
+            val pending = session.pendingLaunch
+            LaunchedEffect(pending?.id) {
+                pending?.let {
+                    session.pendingLaunch = null
+                    runCatching { startActivity(it.intent) }.onFailure(it.onFailure)
+                }
+            }
+
             DiveSlateApp(
                 state = state,
+                settings = session.settings,
+                savedDefault = session.savedDefault,
+                onSettings = { session.settings = it },
+                onSaveDefault = {
+                    session.saveAsDefault()
+                    state = state.withMessage("Saved as your default look")
+                },
+                onRestoreDefault = { session.restoreSavedDefault() },
+                onRestoreFactory = { session.restoreFactoryDefaults() },
                 updates = Updates(
                     state = updateState,
                     onCheck = { checkForUpdate(announce = true) },
@@ -416,7 +466,7 @@ class MainActivity : ComponentActivity() {
         val total = request.dives.size
         exportState = ExportState.Running("Saving", 0, total)
 
-        lifecycleScope.launch {
+        session.viewModelScope.launch {
             val (saved, problems) = withContext(Dispatchers.IO) {
                 val (exports, rendering) = slatesFor(request)
                 val failures = rendering.toMutableList()
@@ -424,7 +474,7 @@ class MainActivity : ComponentActivity() {
                 for ((i, export) in exports.withIndex()) {
                     exportState = ExportState.Running("Saving", i, total)
                     try {
-                        SlateFiles.saveToGallery(this@MainActivity, export)
+                        SlateFiles.saveToGallery(applicationContext, export)
                         written++
                     } catch (e: Exception) {
                         failures += "${export.name}: ${e.message ?: e::class.simpleName}"
@@ -471,16 +521,16 @@ class MainActivity : ComponentActivity() {
         val total = request.dives.size
         exportState = ExportState.Running("Preparing", 0, total)
 
-        lifecycleScope.launch {
+        session.viewModelScope.launch {
             val (uris, problems) = withContext(Dispatchers.IO) {
                 val (exports, rendering) = slatesFor(request)
                 val failures = rendering.toMutableList()
-                SlateFiles.clearSlateCache(this@MainActivity)
+                SlateFiles.clearSlateCache(applicationContext)
                 val written = mutableListOf<Uri>()
                 for ((i, export) in exports.withIndex()) {
                     exportState = ExportState.Running("Preparing", i, total)
                     try {
-                        written += SlateFiles.writePng(this@MainActivity, export)
+                        written += SlateFiles.writePng(applicationContext, export)
                     } catch (e: Exception) {
                         failures += "${export.name}: ${e.message ?: e::class.simpleName}"
                     }
@@ -500,7 +550,14 @@ class MainActivity : ComponentActivity() {
                     "Sharing ${uris.size} of $total. ${firstProblem(problems)}"
                 )
             }
-            startActivity(Intent.createChooser(shareIntent(uris), "Share slate"))
+            // Through the session rather than started here: this coroutine now
+            // outlives the activity that began it, and a chooser started on a
+            // destroyed one is a share that silently never appears.
+            session.launch(Intent.createChooser(shareIntent(uris), "Share slate")) { e ->
+                state = state.withMessage(
+                    "Could not open the share sheet: ${e.message ?: e::class.simpleName}"
+                )
+            }
         }
     }
 
@@ -544,9 +601,9 @@ class MainActivity : ComponentActivity() {
         if (updateState is UpdateState.Checking) return
         if (announce) updateState = UpdateState.Checking
 
-        lifecycleScope.launch {
+        session.viewModelScope.launch {
             val outcome = withContext(Dispatchers.IO) { runCatching { UpdateCheck.check() } }
-            UpdateCheck.markChecked(this@MainActivity)
+            UpdateCheck.markChecked(applicationContext)
             outcome
                 .onSuccess { release ->
                     updateState = when {
@@ -575,10 +632,10 @@ class MainActivity : ComponentActivity() {
      */
     private fun downloadUpdate(release: UpdateCheck.Release) {
         updateState = UpdateState.Downloading(release, 0f)
-        lifecycleScope.launch {
+        session.viewModelScope.launch {
             val outcome = withContext(Dispatchers.IO) {
                 runCatching {
-                    UpdateCheck.download(this@MainActivity, release) { fraction ->
+                    UpdateCheck.download(applicationContext, release) { fraction ->
                         updateState = UpdateState.Downloading(release, fraction)
                     }
                 }
@@ -615,28 +672,26 @@ class MainActivity : ComponentActivity() {
         // routed via LoadState.withMessage becomes LoadState.Failed unless a log
         // is already open, which would replace the whole screen with the "that
         // did not load" page over a message about an install.
-        if (!UpdateCheck.canInstall(this)) {
+        if (!UpdateCheck.canInstall(applicationContext)) {
             updateState = UpdateState.Ready(
                 release,
                 apk,
                 note = "Allow Dive Slate to install apps, then tap Install again",
             )
-            runCatching { startActivity(UpdateCheck.unknownSourcesSettings(this)) }
-                .onFailure {
-                    updateState = UpdateState.Ready(
-                        release,
-                        apk,
-                        note = "This phone offers no page for allowing installs from " +
-                            "an app, so the APK has to be opened from your files",
-                    )
-                }
-            return
-        }
-        runCatching { startActivity(UpdateCheck.installIntent(this, apk)) }
-            .onFailure { e ->
-                updateState = UpdateState.Failed(
-                    "Android would not open the installer: ${e.message ?: e::class.simpleName}",
+            session.launch(UpdateCheck.unknownSourcesSettings(applicationContext)) {
+                updateState = UpdateState.Ready(
+                    release,
+                    apk,
+                    note = "This phone offers no page for allowing installs from " +
+                        "an app, so the APK has to be opened from your files",
                 )
             }
+            return
+        }
+        session.launch(UpdateCheck.installIntent(applicationContext, apk)) { e ->
+            updateState = UpdateState.Failed(
+                "Android would not open the installer: ${e.message ?: e::class.simpleName}",
+            )
+        }
     }
 }
