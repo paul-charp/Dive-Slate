@@ -1500,12 +1500,23 @@ private fun Editor(
             // Segmented rather than a pair of chips, to match Layout: both are
             // one-of-N, and a filter chip says "any number of these" with its
             // shape.
-            SingleChoiceSegmentedButtonRow(Modifier.width(132.dp)) {
+            //
+            // Sized down twice over, because the default is built for a row of
+            // its own and this one rides on a heading. `icon = {}` drops the
+            // leading check mark, which is most of the width — it makes both
+            // segments wide enough to hold a tick that says nothing the fill
+            // does not already say, and on a two-letter label that is more
+            // check than word. The explicit height takes the rest: 40dp is the
+            // full-row control height, and this control is beside a line of
+            // text.
+            SingleChoiceSegmentedButtonRow(Modifier.width(92.dp).height(30.dp)) {
                 SlateUnits.entries.forEachIndexed { index, candidate ->
                     SegmentedButton(
                         selected = candidate == settings.units,
                         onClick = { update { copy(units = candidate) } },
                         shape = SegmentedButtonDefaults.itemShape(index, SlateUnits.entries.size),
+                        icon = {},
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
                         label = {
                             Text(candidate.depthLabel, maxLines = 1, fontSize = 12.sp)
                         },
