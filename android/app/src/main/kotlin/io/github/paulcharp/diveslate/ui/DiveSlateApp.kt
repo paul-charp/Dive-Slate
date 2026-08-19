@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -46,6 +47,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.AlertDialog
@@ -71,7 +73,6 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -96,9 +97,15 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
@@ -1339,9 +1346,19 @@ private fun Editor(
                     }
                 }
             },
+            actions = {
+                DefaultsMenu(
+                    settings = settings,
+                    saved = savedDefault,
+                    onSave = onSaveDefault,
+                    onRestore = onRestoreDefault,
+                    onFactory = onRestoreFactory,
+                )
+            },
             colors = TopAppBarDefaults.topAppBarColors(
                 containerColor = Color.Transparent,
                 titleContentColor = OnSurface,
+                actionIconContentColor = OnSurface,
             ),
         )
 
@@ -1353,7 +1370,11 @@ private fun Editor(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-        Preview(slate = slate, showBackdrop = settings.showBackdrop)
+        Preview(
+            slate = slate,
+            showBackdrop = settings.showBackdrop,
+            onToggleBackdrop = { update { copy(showBackdrop = !showBackdrop) } },
+        )
 
         // Under the thing it pages, the way a carousel control sits under a
         // carousel. In the top bar it would be a long reach from the preview it
@@ -1425,24 +1446,6 @@ private fun Editor(
         Label("Palette")
         PaletteRow(palettes, theme) { picked -> update { copy(theme = picked) } }
 
-        // ---- units ----------------------------------------------------------
-        // A property of the reader, not of the log: the parsers normalise feet
-        // and Fahrenheit to metres and Celsius whatever the exporting computer
-        // was set to, so a log written either way can be printed either way.
-        // Both systems at once is not offered — a slate mixing feet with litres
-        // is a set of numbers nobody's training pairs.
-        Label("Units")
-        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-            SlateUnits.entries.forEachIndexed { index, candidate ->
-                SegmentedButton(
-                    selected = candidate == settings.units,
-                    onClick = { update { copy(units = candidate) } },
-                    shape = SegmentedButtonDefaults.itemShape(index, SlateUnits.entries.size),
-                    label = { Text(candidate.label, maxLines = 1) },
-                )
-            }
-        }
-
         // ---- panel opacity --------------------------------------------------
         Label("Panel opacity  ${(settings.scrimAlpha.coerceIn(minOpacity, 1f) * 100).toInt()}%")
         Slider(
@@ -1454,14 +1457,6 @@ private fun Editor(
             valueRange = minOpacity..1f,
             enabled = settings.showScrim,
         )
-
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Switch(
-                checked = settings.showBackdrop,
-                onCheckedChange = { on -> update { copy(showBackdrop = on) } },
-            )
-            Text("  Checkerboard backdrop", color = Muted, fontSize = 14.sp)
-        }
 
         // ---- elements -------------------------------------------------------
         Label("Elements")
@@ -1484,10 +1479,40 @@ private fun Editor(
 
         // ---- figures --------------------------------------------------------
         val figureBudget = layout.maxFigures
-        Label(
-            if (chosenStats.isEmpty()) "Figures — automatic, up to $figureBudget"
-            else "Figures — ${chosenStats.size} of $figureBudget"
-        )
+        // The units ride on this line rather than taking a heading and a row of
+        // their own. They are a property of the reader rather than of the log —
+        // the parsers normalise feet and Fahrenheit away whatever the exporting
+        // computer was set to — and the only thing they change is how these
+        // figures are printed, so they belong beside them. Both systems at once
+        // is not offered: a slate mixing feet with litres is a set of numbers
+        // nobody's training pairs.
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Box(Modifier.weight(1f)) {
+                Label(
+                    if (chosenStats.isEmpty()) "Figures — automatic, up to $figureBudget"
+                    else "Figures — ${chosenStats.size} of $figureBudget"
+                )
+            }
+            // Segmented rather than a pair of chips, to match Layout: both are
+            // one-of-N, and a filter chip says "any number of these" with its
+            // shape.
+            SingleChoiceSegmentedButtonRow(Modifier.width(132.dp)) {
+                SlateUnits.entries.forEachIndexed { index, candidate ->
+                    SegmentedButton(
+                        selected = candidate == settings.units,
+                        onClick = { update { copy(units = candidate) } },
+                        shape = SegmentedButtonDefaults.itemShape(index, SlateUnits.entries.size),
+                        label = {
+                            Text(candidate.depthLabel, maxLines = 1, fontSize = 12.sp)
+                        },
+                    )
+                }
+            }
+        }
         ChipRow {
             FilterChip(
                 selected = chosenStats.isEmpty(),
@@ -1549,16 +1574,6 @@ private fun Editor(
                 fontSize = 12.sp,
             )
         }
-
-        // ---- defaults -------------------------------------------------------
-        // Under everything it covers, because it is about all of it.
-        Defaults(
-            settings = settings,
-            saved = savedDefault,
-            onSave = onSaveDefault,
-            onRestore = onRestoreDefault,
-            onFactory = onRestoreFactory,
-        )
 
         // ---- export ---------------------------------------------------------
         // Saving leads. The PNG is what this project actually produces, and the
@@ -1762,7 +1777,7 @@ private const val CANVAS_FRACTION = 0.86f
 private const val PREVIEW_RATIO = 1.2f
 
 @Composable
-private fun Preview(slate: Slate?, showBackdrop: Boolean) {
+private fun Preview(slate: Slate?, showBackdrop: Boolean, onToggleBackdrop: () -> Unit) {
     // A fixed frame standing in for the shot, rather than a box sized to the
     // slate. Scaling every layout up to the same width made a 400px corner
     // badge and a 1080px full-width strip look alike — the one difference
@@ -1789,6 +1804,71 @@ private fun Preview(slate: Slate?, showBackdrop: Boolean) {
                     with(SlatePainter) { drawSlate(current) }
                 }
             }
+        }
+
+        // On the thing it changes, rather than in the list of settings below.
+        // The backdrop is the one control on this screen that never reaches the
+        // exported PNG — it is a stand-in for footage nobody has supplied yet —
+        // so it does not belong among the switches that decide what the image
+        // says. Here it also costs the page no height at all.
+        BackdropToggle(
+            on = showBackdrop,
+            onToggle = onToggleBackdrop,
+            modifier = Modifier.align(Alignment.BottomEnd).padding(10.dp),
+        )
+    }
+}
+
+/**
+ * The backdrop switch, as a checkerboard.
+ *
+ * Drawn rather than iconified, for the reason already recorded on
+ * [SelectionDot]: the app carries Material's 40-icon core set, which has no
+ * checkerboard in it, and the extended set is several thousand vectors to add
+ * one glyph to an APK that is otherwise under two megabytes.
+ *
+ * Its disc is opaque enough to sit on either state — the mid-grey checkerboard,
+ * or the app's own surface once the checkerboard is off — because a control
+ * that reads on only one of the two states it toggles between is unusable in
+ * exactly one direction.
+ */
+@Composable
+private fun BackdropToggle(on: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
+    val scheme = MaterialTheme.colorScheme
+    val glyph = if (on) scheme.primary else scheme.onSurfaceVariant
+    Box(
+        modifier
+            .size(32.dp)
+            .clip(CircleShape)
+            .background(scheme.surface.copy(alpha = 0.86f))
+            .clickable(onClick = onToggle)
+            .semantics {
+                role = Role.Switch
+                contentDescription = "Checkerboard backdrop"
+                stateDescription = if (on) "On" else "Off"
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(Modifier.size(16.dp)) {
+            val cell = size.width / 2f
+            // Two filled squares on the diagonal and two outlined, which is the
+            // smallest mark that still reads as a checkerboard rather than as
+            // four dots.
+            drawRect(color = glyph, topLeft = Offset.Zero, size = Size(cell, cell))
+            drawRect(color = glyph, topLeft = Offset(cell, cell), size = Size(cell, cell))
+            val hairline = size.width / 16f
+            drawRect(
+                color = glyph,
+                topLeft = Offset(cell, 0f),
+                size = Size(cell, cell),
+                style = Stroke(width = hairline),
+            )
+            drawRect(
+                color = glyph,
+                topLeft = Offset(0f, cell),
+                size = Size(cell, cell),
+                style = Stroke(width = hairline),
+            )
         }
     }
 }
@@ -1896,54 +1976,78 @@ private fun Toggle(label: String, checked: Boolean, onChange: (Boolean) -> Unit)
 }
 
 /**
- * Saving the look, and the two ways back.
+ * Saving the look, and the two ways back — in the bar, not on the page.
+ *
+ * These were a heading, a row of buttons and a line of explanation, permanently
+ * on screen, for three actions taken a few times a year. An overflow menu is
+ * where Android has always put exactly that, and it costs the scroll nothing.
+ *
+ * Stock Material 3 throughout — [DropdownMenu], [DropdownMenuItem],
+ * [AlertDialog] — so the menu takes the wallpaper scheme along with the rest of
+ * the chrome rather than being coloured by hand. (The slate's own palette is a
+ * different matter entirely: see the note on [DiveSlateTheme].)
  *
  * Saving is explicit rather than every change being persisted as it is made.
- * The controls above are a scratchpad for the dive in front of you — a palette
- * tried against one photo, a layout tried for one story — and quietly promoting
- * the last thing tried to the thing you always get is how a remembered default
- * becomes a surprise.
+ * The controls on the page are a scratchpad for the dive in front of you — a
+ * palette tried against one photo, a layout tried for one story — and quietly
+ * promoting the last thing tried to the thing you always get is how a
+ * remembered default becomes a surprise.
  *
  * The two restores are different questions and both are worth having:
  *
  * * **Restore default** puts back what was saved, and is the way out of ten
- *   minutes of fiddling. Offered only when there is something to go back to and
- *   the current look actually differs from it, since a button that would change
- *   nothing is one that says nothing about what it does.
+ *   minutes of fiddling. Enabled only when there is something to go back to and
+ *   the current look actually differs from it, since an item that would change
+ *   nothing says nothing about what it does.
  * * **Factory reset** goes back to what the app shipped with *and forgets the
- *   saved default*, because a factory reset that left the saved look in place
- *   would put it back on the next launch — exactly the state someone reaching
- *   for that button is trying to leave. It confirms first, for the same reason:
- *   it is the one control here that discards something the user made.
+ *   saved default*, because one that left the saved look in place would put it
+ *   back on the next launch — exactly the state someone reaching for it is
+ *   trying to leave. It confirms first, being the one control here that
+ *   discards something the user made.
+ *
+ * The caption at the foot of the menu is what the muted line on the page used
+ * to say. It is here because "default" means nothing until you know whether you
+ * have one, and the menu is the only place that question is being asked.
  */
 @Composable
-private fun Defaults(
+private fun DefaultsMenu(
     settings: SlateSettings,
     saved: SlateSettings?,
     onSave: () -> Unit,
     onRestore: () -> Unit,
     onFactory: () -> Unit,
 ) {
+    var open by rememberSaveable { mutableStateOf(false) }
     var confirming by rememberSaveable { mutableStateOf(false) }
 
-    Label("Defaults")
-    ChipRow {
-        FilledTonalButton(onClick = onSave) { Text("Save as default") }
-        TextButton(onClick = onRestore, enabled = saved != null && saved != settings) {
-            Text("Restore default")
-        }
-        TextButton(onClick = { confirming = true }) { Text("Factory reset") }
+    IconButton(onClick = { open = true }) {
+        Icon(Icons.Filled.MoreVert, contentDescription = "Defaults")
     }
-    Text(
-        when {
-            saved == null ->
-                "New dives open with the shipped look until you save one of your own."
-            saved == settings -> "New dives open with this look."
-            else -> "Saved. What you have changed since applies to this session only."
-        },
-        color = Muted,
-        fontSize = 12.sp,
-    )
+    DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+        DropdownMenuItem(
+            text = { Text("Save as default") },
+            onClick = { open = false; onSave() },
+        )
+        DropdownMenuItem(
+            text = { Text("Restore default") },
+            enabled = saved != null && saved != settings,
+            onClick = { open = false; onRestore() },
+        )
+        DropdownMenuItem(
+            text = { Text("Factory reset") },
+            onClick = { open = false; confirming = true },
+        )
+        Text(
+            when {
+                saved == null -> "New dives open with the shipped look until you save one."
+                saved == settings -> "New dives open with this look."
+                else -> "Saved. What you have changed since applies to this session only."
+            },
+            color = Muted,
+            fontSize = 12.sp,
+            modifier = Modifier.widthIn(max = 240.dp).padding(horizontal = 16.dp, vertical = 8.dp),
+        )
+    }
 
     if (confirming) {
         AlertDialog(

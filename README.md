@@ -182,11 +182,11 @@ the incoming style knows nothing about.
 Also adjustable: **metric or imperial**, which elements appear, which figures are
 shown, and the scrim panel's opacity.
 
-Once it looks right, **Save as default** — every dive you open after that starts
-there. **Restore default** undoes an afternoon's fiddling, and **Factory reset**
-goes back to the shipped look and forgets the saved one. Nothing is saved behind
-your back: the controls are a scratchpad for the dive in front of you until you
-say otherwise.
+Once it looks right, open the **⋮** menu and **Save as default** — every dive you
+open after that starts there. **Restore default** undoes an afternoon's fiddling,
+and **Factory reset** goes back to the shipped look and forgets the saved one.
+Nothing is saved behind your back: the controls are a scratchpad for the dive in
+front of you until you say otherwise.
 
 <details>
 <summary><strong>Why the opacity slider only moves the panel</strong></summary>

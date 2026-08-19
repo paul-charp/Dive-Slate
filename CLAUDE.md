@@ -403,13 +403,39 @@ appears.
 **Saving is explicit, and there are three actions rather than one.** Persisting
 every slider drag would promote the last thing tried to the thing you always
 get, which is how a remembered default becomes a surprise; so the editor is a
-scratchpad and *Save as default* is a button. *Restore default* puts back what
-was saved and is offered only when there is something to go back to and the
-current look differs from it. *Factory reset* goes back to what the app shipped
-with **and forgets the saved default** — one that left the saved look in place
-would put it back on the next launch, which is the state someone reaching for
-that button is trying to leave — and it confirms first, being the one control
-that discards something the user made.
+scratchpad and *Save as default* is a deliberate act. *Restore default* puts
+back what was saved and is enabled only when there is something to go back to
+and the current look differs from it. *Factory reset* goes back to what the app
+shipped with **and forgets the saved default** — one that left the saved look in
+place would put it back on the next launch, which is the state someone reaching
+for it is trying to leave — and it confirms first, being the one control that
+discards something the user made.
+
+**Where a control lives is a claim about how often it is touched.** The editor
+is one long scroll — roughly two phone screens — so a heading and a row is a
+real cost, and three controls do not earn one:
+
+* **The defaults go in the top bar's overflow menu**, in stock `DropdownMenu` /
+  `DropdownMenuItem` / `AlertDialog`, so they take the wallpaper scheme with the
+  rest of the chrome. They were a heading, a button row and a line of prose
+  permanently on screen for three actions taken a few times a year. The caption
+  the page used to carry moved to the foot of the menu, because "default" means
+  nothing until you know whether you have one.
+* **The units ride on the figures heading line.** They are one-of-two, so they
+  stay a `SingleChoiceSegmentedButtonRow` matching Layout rather than becoming
+  chips — but they sit beside the figures because printing those figures is the
+  only thing they do.
+* **The checkerboard toggle is drawn on the preview itself.** It is the one
+  control on the screen that never reaches the exported PNG, so it does not
+  belong among the switches deciding what the image says. Its glyph is hand-drawn
+  for the reason already recorded on `SelectionDot`: the APK carries Material's
+  40-icon core set, which has no checkerboard, and the extended set is thousands
+  of vectors for one mark. Its disc has to read on *both* states it toggles
+  between — the mid-grey checkerboard and the app surface underneath it — or the
+  control is unusable in exactly one direction.
+
+Together those are about 234dp off a 1360dp page, and none of it is a control
+that changes the exported image.
 
 **`SlateSettings.normalised()` is where a stored string stops being dangerous.**
 It is the only input in the app that can hold a state the UI cannot produce: a
