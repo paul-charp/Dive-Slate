@@ -362,12 +362,13 @@ class RecentDivesTest {
     }
 
     @Test
-    fun `a dive whose log is uncached is still recordable but reads back as gone`() {
-        // The activity refuses to record one of these; the store itself does not
-        // need to, and the retention pass deletes nothing that was never there.
+    fun `a dive whose log is not cached is not recorded at all`() {
+        // A row pointing at a log the app has no copy of cannot be opened, which
+        // is worse than no row. It is also how the bundled sample stays out of
+        // the list: that is the one log the app deliberately keeps no copy of,
+        // and recording it hid the very button that offers it.
         recents.record("never-saved.ssrf", dive(), 0, SlateSettings.FACTORY)
 
-        assertEquals(1, recents.entries().size)
-        assertNull(cache.read("never-saved.ssrf"))
+        assertTrue(recents.entries().isEmpty())
     }
 }

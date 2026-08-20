@@ -91,8 +91,15 @@ class RecentDives(private val index: File, private val cache: LogCache) {
      * A dive already remembered is updated in place rather than duplicated —
      * the same dive opened twice is one row, and the second visit is what its
      * timestamp and its look now describe.
+     *
+     * **A dive whose log is not cached is not recorded.** The row would be one
+     * that cannot be opened, which is worse than no row; and it is how the
+     * bundled sample stays out of the list, since that is the one log the app
+     * deliberately keeps no copy of. Checked here rather than at the call site
+     * so the rule sits with the rest of what this class decides to keep.
      */
     fun record(logName: String, dive: Dive, position: Int, settings: SlateSettings) {
+        if (!cache.has(logName)) return
         val entry = Entry(
             openedAt = System.currentTimeMillis(),
             logName = logName,

@@ -509,8 +509,11 @@ dropped**: a single logbook larger than the whole budget is a real thing to
 open, and evicting the dive just worked on to satisfy a limit would empty the
 list at the moment it was most useful.
 
-**The sample dive is offered only while the recent list is empty**, and the
-line of prose above the buttons changes with it. The sample answers "what does
+**The sample dive is offered only while the recent list is empty**, and it is
+therefore the one log the app deliberately keeps **no** copy of — `record`
+drops a dive whose log is not cached, which is what keeps the sample out of the
+list. Recording it hid the very button that offers it, so one look at the sample
+took the sample away. The line of prose above the buttons changes with it. The sample answers "what does
 this app do" for someone with no log in front of them; once there are real dives
 to go back to, it is a standing offer to look at someone else's dive instead of
 your own. A fixed caption naming a button that is not there would send half the
