@@ -7,12 +7,12 @@ to be trustworthy in a way a store would otherwise enforce for you.
 ## Cutting a release
 
 Bump both numbers in [`android/app/build.gradle.kts`](../android/app/build.gradle.kts).
-The tree currently carries `versionCode = 18` / `versionName = "0.6.0"`, so the
+The tree currently carries `versionCode = 19` / `versionName = "0.7.0"`, so the
 release after this one is:
 
 ```kotlin
-versionCode = 19        // must increase; this is what the updater compares
-versionName = "0.6.1"   // must equal the tag without its leading v
+versionCode = 20        // must increase; this is what the updater compares
+versionName = "0.7.1"   // must equal the tag without its leading v
 ```
 
 Write what the release page should say, in `docs/release-notes/<tag>.md`:
