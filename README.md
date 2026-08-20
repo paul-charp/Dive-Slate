@@ -406,7 +406,8 @@ the release page in a browser instead.
 |---|---|
 | **Subsurface-mobile** | Export the dive and pick Dive Slate in the share sheet |
 | **A file on the phone** | Open it from the app, wherever it lives — several at once if you like |
-| **Neither** | The bundled sample dive, to see what the app does |
+| **Neither** | The bundled sample dive, offered until you have dives of your own |
+| **Again** | The last twenty dives are listed on the start screen |
 
 | Format | Extensions | Notes |
 | --- | --- | --- |
@@ -418,6 +419,27 @@ from. Nothing is merged or de-duplicated: two exports overlapping is an ordinary
 accident, and dive numbers are per-logbook, so any attempt to spot a duplicate
 across files would be a guess.
 
+### Recent dives
+
+A log shared with this app has to be copied on the way past — the permission
+that comes with it dies with the screen that received it — so the app already
+has a copy of everything you have opened. The start screen lists the **dives**
+you took into the editor, not the files they came from, because the thing you
+come back for is that dive. One tap and you are in the editor again.
+
+Each row also remembers **the look you gave that dive** and restores it, so
+reopening a slate reproduces the slate. That look applies to that dive only: it
+never becomes what the next dive opens with, because a remembered default that
+arrives by surprise is worse than no memory at all.
+
+It is a cache, not a library, and it says so: **twenty dives**, oldest dropped
+first, with the size on screen and a **Clear** that empties it. A log is kept
+exactly while some remembered dive still needs it, and there is an 8 MB backstop
+for anyone opening very large logbooks. The logs themselves live wherever you
+keep them and are never touched. A log that fails to parse is not cached at all
+— a file that cannot be opened has no business taking a place in a list of ways
+to open things.
+
 Detection reads file content, not the extension, so a renamed log still works.
 Subsurface's own database cannot be read directly — Android denies it to other
 apps — so the export is the only route in, not a workaround.
@@ -426,10 +448,6 @@ apps — so the export is the only route in, not a workaround.
 
 - No background-media picker, so the palette cannot yet be judged against your
   own footage — only against the checkerboard.
-- No library. Every incoming log is already copied to `filesDir/logs/`, and
-  nothing ever reads that directory back, so re-rendering an old dive means
-  exporting it from Subsurface again. Surfacing what is already being saved is
-  the cheapest real improvement left.
 
 ## Build
 
@@ -443,7 +461,7 @@ is **not** required; it is only needed for the IDE and the emulator GUI.
 
 ```bash
 cd android && ./gradlew core:test              # 87 tests, no device
-cd android && ./gradlew :app:testDebugUnitTest # 30 more, also no device
+cd android && ./gradlew :app:testDebugUnitTest # 42 more, also no device
 cd android && ./gradlew :app:assembleRelease
 ```
 

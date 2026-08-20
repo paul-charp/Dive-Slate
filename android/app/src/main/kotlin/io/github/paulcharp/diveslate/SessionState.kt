@@ -8,7 +8,12 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import io.github.paulcharp.diveslate.ui.ExportState
 import io.github.paulcharp.diveslate.ui.LoadState
+import io.github.paulcharp.diveslate.core.Dive
 import io.github.paulcharp.diveslate.ui.UpdateState
+import java.io.File
+
+/** A dive on its way into the editor: which cached log holds it, and where. */
+data class EditingDive(val logName: String, val dive: Dive, val position: Int)
 
 /**
  * Everything the app is in the middle of, held where a rotation cannot reach it.
@@ -32,6 +37,37 @@ class SessionState(application: Application) : AndroidViewModel(application) {
 
     private val store = SlateSettingsStore(application)
 
+    /**
+     * The app's own copies of the logs it has been given, and the dives it
+     * remembers being taken into the editor.
+     *
+     * Owned here rather than by the activity because the start screen draws
+     * from them: the list has to survive the rotation that rebuilds the
+     * activity, exactly like everything else on this object.
+     */
+    val cache = LogCache(File(application.filesDir, "logs"))
+
+    val recents = RecentDives(File(application.filesDir, "recent.index"), cache)
+
+    /** What the start screen offers as a way back in. Re-read, never guessed. */
+    var recent by mutableStateOf(recents.entries())
+        private set
+
+    /** What the copies occupy, for the one line that admits the cost. */
+    var recentBytes by mutableStateOf(recents.bytes())
+        private set
+
+    private fun refreshRecent() {
+        recent = recents.entries()
+        recentBytes = recents.bytes()
+    }
+
+    /** Forget every remembered dive, and every log copy behind them. */
+    fun clearRecent() {
+        recents.clear()
+        refreshRecent()
+    }
+
     /** What has been loaded, and what went wrong loading it. */
     var logs by mutableStateOf<LoadState>(LoadState.Empty)
 
@@ -44,6 +80,64 @@ class SessionState(application: Application) : AndroidViewModel(application) {
      * store only when the user saves them as the default.
      */
     var settings by mutableStateOf(store.load()?.normalised() ?: SlateSettings.FACTORY)
+        private set
+
+    /**
+     * The look a *particular* dive is being edited in, when it has one of its
+     * own.
+     *
+     * Set when a dive is opened from the recent list, which restores the look
+     * that dive was last given — reopening a slate ought to reproduce the
+     * slate. It is deliberately **not** [settings]: letting it become the
+     * session look would mean that opening an old dive silently changed what
+     * every dive after it opened with, which is the same failure the editor
+     * being a scratchpad exists to prevent. Cleared on the way out of the
+     * editor.
+     */
+    var editorSettings by mutableStateOf<SlateSettings?>(null)
+        private set
+
+    /** What the editor should actually show: the dive's look, or the session's. */
+    val effectiveSettings: SlateSettings get() = editorSettings ?: settings
+
+    /** A change made by a control, applied to whichever of the two is in force. */
+    fun changeSettings(value: SlateSettings) {
+        if (editorSettings != null) editorSettings = value else settings = value
+    }
+
+    /**
+     * Remember these dives, in the look currently on screen.
+     *
+     * Called on the way into the editor and again on the way out, so what is
+     * stored is the look the user actually left the dive in. A dive whose log
+     * has no cached copy is skipped rather than recorded: the row would be one
+     * that cannot be opened, which is worse than no row at all.
+     */
+    fun rememberEditing(dives: List<EditingDive>) {
+        var wrote = false
+        for (it in dives) {
+            if (!cache.has(it.logName)) continue
+            recents.record(it.logName, it.dive, it.position, effectiveSettings)
+            wrote = true
+        }
+        if (wrote) refreshRecent()
+    }
+
+    /** Leaving the editor: the dive's own look stops applying. */
+    fun closeEditor() {
+        editorSettings = null
+    }
+
+    /** Open a remembered dive in the look it was left in. */
+    fun openInLook(look: SlateSettings) {
+        editorSettings = look.normalised()
+    }
+
+    /** Drop a remembered dive whose log turned out to be unreadable. */
+    fun forget(entry: RecentDives.Entry) {
+        recents.forget(entry)
+        refreshRecent()
+    }
 
     /** The saved default, or null while the user has never saved one. */
     var savedDefault by mutableStateOf(store.load()?.normalised())
@@ -88,15 +182,16 @@ class SessionState(application: Application) : AndroidViewModel(application) {
 
     /** Remember the current look as what the app opens with. */
     fun saveAsDefault() {
-        val normalised = settings.normalised()
+        val normalised = effectiveSettings.normalised()
         settings = normalised
+        editorSettings = null
         store.save(normalised)
         savedDefault = normalised
     }
 
     /** Go back to the saved default, discarding this session's fiddling. */
     fun restoreSavedDefault() {
-        savedDefault?.let { settings = it }
+        savedDefault?.let { settings = it; editorSettings = null }
     }
 
     /**
@@ -108,6 +203,7 @@ class SessionState(application: Application) : AndroidViewModel(application) {
      */
     fun restoreFactoryDefaults() {
         settings = SlateSettings.FACTORY
+        editorSettings = null
         store.clear()
         savedDefault = null
     }

@@ -35,7 +35,7 @@ tools/         Python. Palette maths and the generators for Themes.kt.
 
 ```bash
 cd android && ./gradlew core:test              # 87 tests, no device needed
-cd android && ./gradlew :app:testDebugUnitTest # 30 more, also no device
+cd android && ./gradlew :app:testDebugUnitTest # 42 more, also no device
 cd android && ./gradlew :app:installDebug
 cd android && ./gradlew :app:assembleRelease   # signed if keystore.properties
                                                # is present, debug key if not —
@@ -109,10 +109,14 @@ android/app/
                       and the SharedPreferences store behind "save as default"
   SlatePainter.kt     paints core's display list onto a Canvas
   SlateFiles.kt       MediaStore export, FileProvider, export naming
+  LogCache.kt         the app's own copies of the logs it has been given
+  RecentDives.kt      the dives taken into the editor, the look each was given,
+                      and what that means for what is kept on disk
   UpdateCheck.kt      self-update: manifest, download, checksum, installer
   ui/DiveSlateApp.kt  Compose UI
   src/test/           JVM tests for the three above that need no framework:
-                      the settings round trip, the export names, the manifest
+                      the settings round trip, the export names, the manifest,
+                      dive identity and the retention rules
 
 tools/
   palette.py          OKLab/OKLCH maths, CVD simulation, the palette gates and
@@ -454,6 +458,135 @@ remembered is what the user asked for — clearing the flag would mean one look 
 the segment screen silently threw the preference away for every style after it,
 which is the same reasoning that carries the dark/light choice across a style
 change.
+
+## Recent dives, and the only storage the app takes
+
+Every incoming log is copied to `filesDir/logs/`, because the permission on a
+`content://` URI dies with the activity that received it — stashing the URI to
+open later is a guaranteed bug. `LogCache` is that directory and nothing else;
+`RecentDives` is the list drawn from it and decides what is worth keeping.
+
+**Dives, not files.** The first version of this listed logbooks — `reference.ssrf,
+6 dives` — which left the finding to the reader when the thing they came back
+for is *that dive*. Listing dives makes the start screen a list of the slates
+that have been made, which is what the app is for. It also brings back the
+provenance problem the dive list is arranged around: dive numbers are
+per-logbook and collide, so the source file is on every row, or two rows read
+identically and neither can be told from the other.
+
+**Reaching the editor is what makes a dive recent**, not opening the file it is
+in — a 200-dive logbook would otherwise contribute 200 rows nobody chose.
+Opening the editor is a statement about one dive, or about each dive in a batch,
+and all of a batch is recorded. It is recorded again as the editor closes, so
+what is stored is the look the dive was *left* in.
+
+**A dive is identified by its number and its time, never by its position.** The
+list is sorted newest-first for display, so a stored index would move the moment
+a logbook gained a dive, and a remembered slate would quietly become a different
+dive's — which does not throw and does not look wrong. Both fields are optional
+in the model, so the raw position in the file is the last resort. A dive that
+cannot be found at all is dropped and said so, rather than resolved to a
+neighbour.
+
+**The look is stored per dive, and restoring it is scoped to that dive.** A
+reopened slate ought to reproduce the slate, so the recorded look is applied on
+the way in — but as `SessionState.editorSettings`, never as `settings`. Letting
+it become the session look would mean that opening an old dive silently changed
+what every dive after it opened with, which is precisely the failure the
+scratchpad model exists to prevent. It is cleared by a `LaunchedEffect` keyed on
+whether an editor is showing, **not** by the editor's disposal: a rotation
+disposes the composition too, and clearing there dropped the restored look every
+time the phone turned over.
+
+**Retention hangs off the dive list, so there is one authority rather than
+two.** Twenty dives; a cached log is kept exactly while some remembered dive
+still needs it, and deleted when none does. `MAX_BYTES` is a second and blunter
+bound — twenty dives across twenty large logbooks would satisfy the count and
+still cost hundreds of megabytes — and it is applied by *shortening the list*,
+oldest first, rather than by deleting files behind the list's back. A log is
+charged once however many dives point at it. **The newest entry is never
+dropped**: a single logbook larger than the whole budget is a real thing to
+open, and evicting the dive just worked on to satisfy a limit would empty the
+list at the moment it was most useful.
+
+**The sample dive is offered only while the recent list is empty**, and the
+line of prose above the buttons changes with it. The sample answers "what does
+this app do" for someone with no log in front of them; once there are real dives
+to go back to, it is a standing offer to look at someone else's dive instead of
+your own. A fixed caption naming a button that is not there would send half the
+readers looking for it.
+
+**Only what parsed is kept**, so the copy is taken *after* the parse. It used to
+be taken before, which was harmless for exactly as long as nothing read the
+directory back: a share that turns out to be a zip would otherwise hold a row
+and fail again on every attempt.
+
+**Everything a row draws is stored, never computed.** Parsing at list time would
+make the start screen cost whatever the largest cached logbook costs, on every
+launch. The figures stored are the *computed* ones — `computedMaxDepthMetres`,
+not the optional logged field — because that is what the slate prints, and a row
+quoting the logged field would read blank for exactly the dives whose slate
+shows a depth. The figures are also printed in the units of that dive's own
+look, since the row describes a slate that exists.
+
+**The index is one line per dive, pipe-separated, with the encoded settings
+last.** Same reasoning as `SlateSettings.encode`: the app carries no reflection
+and the release build is shrunk with R8, so a serialisation library would be a
+dependency and a keep rule for a dozen scalars. The pipe is the separator
+precisely because `LogCache.sanitise` removes it and `encode()` never emits it —
+and a site name is free text from a logbook, so pipes and newlines are stripped
+from it or one dive becomes two rows.
+
+**A display name is the one input in this app that can name a path.** It arrives
+from another app via `OpenableColumns.DISPLAY_NAME` and nothing obliges it to be
+a legal file name; `LogCache.sanitise` reduces it, and a test writes
+`../../evil.ssrf` and checks where it lands. Which cached file a parsed log came
+from is *derived* by putting `DiveLog.source` through the same reduction, rather
+than stored a second time where the two could drift.
+
+## Add to story has now been refused three times — read this first
+
+`ADD_TO_STORY` was this app's *only* export once, and `d75cf2b` removed it
+because being the only route made the button a bet on which app the user wanted,
+and on a phone without Instagram it degraded silently into the chooser it was
+supposed to be an alternative to. It was rebuilt in the shape that answers both
+objections — shown only when the package manager confirms Instagram is there,
+only for a single slate, always beside the chooser — and taken back out again,
+because those were never the binding constraints. These are:
+
+- **Meta requires a registered Facebook App ID.** Since January 2023 the intent
+  must carry one in `source_application`, or Instagram refuses with "The app you
+  shared from doesn't currently support sharing to Stories." No amount of
+  correct intent-building substitutes for it, and this project has no Meta app.
+- **A sticker with no background does not land on the user's footage.** It is
+  permitted — Meta's docs say a background asset, a sticker asset, or both — but
+  the story background then comes from `top_background_color` /
+  `bottom_background_color`, solid or gradient. The 2024 implementation passed
+  `top_background_color`, which is the evidence it had already met this. The
+  result is the slate on a coloured card, and there is no documented way for the
+  user to swap their own video in once the composer has opened.
+
+**So the feature is the background-media picker, not the intent.** A slate over
+your own footage requires the app to pass `background_video` or
+`background_image` itself, which means holding the media — the same gap the
+README lists under Known gaps. Done that way round the intent finally earns its
+place: background is the user's footage, `interactive_asset_uri` is the slate,
+and Instagram composites the two with the slate still draggable. Attempted in
+either order, that is the order.
+
+Two implementation details worth not rediscovering, if it is ever revived:
+
+- **The asset URI travels in an extra, so `addFlags` does not reach it.** The
+  automatic grant walks the intent's data and its ClipData and nothing else. For
+  multi-image sharing the fix was ClipData; here it cannot be, because Instagram
+  reads `interactive_asset_uri` and not the clip. `grantUriPermission` to the
+  package by name, or Instagram opens on an empty story — which looks exactly
+  like this app having produced nothing.
+- **A `<queries>` entry for `com.instagram.android` is what makes the "is it
+  installed" question answerable at all** from Android 11. Without it
+  `resolveActivity` returns null on every modern phone, and the button silently
+  never appears. If it returns, it stays one named package and never a wildcard:
+  everything else here is deliberately blind to what is on the phone.
 
 ## Metric or imperial is a property of the reader
 
