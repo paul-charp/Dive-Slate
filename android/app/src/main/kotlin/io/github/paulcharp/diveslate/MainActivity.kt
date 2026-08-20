@@ -9,12 +9,11 @@ import android.os.Bundle
 import android.provider.OpenableColumns
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.viewModels
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.lifecycle.lifecycleScope
+import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.viewModelScope
 import io.github.paulcharp.diveslate.core.DiveLog
 import io.github.paulcharp.diveslate.core.ParseException
 import io.github.paulcharp.diveslate.core.parseText
@@ -22,7 +21,9 @@ import io.github.paulcharp.diveslate.core.renderOverlay
 import io.github.paulcharp.diveslate.ui.DiveSlateApp
 import io.github.paulcharp.diveslate.ui.ExportState
 import io.github.paulcharp.diveslate.ui.LoadState
+import io.github.paulcharp.diveslate.ui.DiveRef
 import io.github.paulcharp.diveslate.ui.Notice
+import io.github.paulcharp.diveslate.ui.Recents
 import io.github.paulcharp.diveslate.ui.UpdateState
 import io.github.paulcharp.diveslate.ui.Updates
 import io.github.paulcharp.diveslate.ui.withMessage
@@ -42,9 +43,33 @@ import java.io.File
  */
 class MainActivity : ComponentActivity() {
 
-    private var state by mutableStateOf<LoadState>(LoadState.Empty)
-    private var updateState by mutableStateOf<UpdateState>(UpdateState.Idle)
-    private var exportState by mutableStateOf<ExportState>(ExportState.Idle)
+    /**
+     * Everything the app is in the middle of, kept out of the activity.
+     *
+     * Held in a ViewModel because an activity is destroyed and rebuilt by every
+     * configuration change: with these as fields, rotating the phone put the
+     * user back on the start screen with the open dive log gone. See
+     * [SessionState] — the coroutines below run on its scope for the same
+     * reason, so an export in progress survives the same rotation.
+     */
+    private val session: SessionState by viewModels()
+
+    /**
+     * The three states below read and write [session]. Kept as properties so
+     * the methods in this file — which is otherwise unchanged by where the
+     * state lives — still read as they did.
+     */
+    private var state: LoadState
+        get() = session.logs
+        set(value) { session.logs = value }
+
+    private var updateState: UpdateState
+        get() = session.updates
+        set(value) { session.updates = value }
+
+    private var exportState: ExportState
+        get() = session.exports
+        set(value) { session.exports = value }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -67,14 +92,41 @@ class MainActivity : ComponentActivity() {
         // Guarded, and before setContent: an unexpected intent must not kill
         // the activity before there is a screen on which to say so. A share
         // that launches nothing looks identical to a share that did nothing.
-        runCatching { handleIntent(intent) }.onFailure {
-            state = LoadState.Failed(
-                "Could not open that share: ${it.message ?: it::class.simpleName}"
-            )
+        //
+        // Once per intent, not once per activity. A rotation rebuilds the
+        // activity with the same intent still attached, and reading it again
+        // would parse the shared file a second time and list every dive twice.
+        if (!session.handledIntent) {
+            session.handledIntent = true
+            runCatching { handleIntent(intent) }.onFailure {
+                state = LoadState.Failed(
+                    "Could not open that share: ${it.message ?: it::class.simpleName}"
+                )
+            }
         }
         setContent {
+            // The chooser and the installer are produced by work that outlives
+            // this activity, so they are parked in the session and launched
+            // from whichever activity is on screen when they turn up.
+            val pending = session.pendingLaunch
+            LaunchedEffect(pending?.id) {
+                pending?.let {
+                    session.pendingLaunch = null
+                    runCatching { startActivity(it.intent) }.onFailure(it.onFailure)
+                }
+            }
+
             DiveSlateApp(
                 state = state,
+                settings = session.effectiveSettings,
+                savedDefault = session.savedDefault,
+                onSettings = { session.changeSettings(it) },
+                onSaveDefault = {
+                    session.saveAsDefault()
+                    state = state.withMessage("Saved as your default look")
+                },
+                onRestoreDefault = { session.restoreSavedDefault() },
+                onRestoreFactory = { session.restoreFactoryDefaults() },
                 updates = Updates(
                     state = updateState,
                     onCheck = { checkForUpdate(announce = true) },
@@ -85,6 +137,14 @@ class MainActivity : ComponentActivity() {
                 exports = exportState,
                 onLoadSample = { loadBundledSample() },
                 onOpenUris = { uris -> openPicked(uris) },
+                recent = Recents(
+                    entries = session.recent,
+                    bytes = session.recentBytes,
+                    onOpen = { entry -> openRecent(entry) },
+                    onClear = { session.clearRecent() },
+                ),
+                onEditing = { refs -> session.rememberEditing(editingDives(refs)) },
+                onLeaveEditor = { session.closeEditor() },
                 onBack = { state = LoadState.Empty },
                 onExport = { request -> shareSlates(request) },
                 onSaveToGallery = { request -> saveToGallery(request) },
@@ -239,17 +299,20 @@ class MainActivity : ComponentActivity() {
      *
      * The permission granted with a `content://` URI dies with the activity that
      * received it, so stashing the URI to open later is a guaranteed bug. The
-     * bytes are copied now, which also gives the app a small history to re-render
-     * from without going back to Subsurface for another export.
+     * bytes are copied now, which is also what the start screen's recent list is
+     * drawn from — the whole point of keeping them is not having to go back to
+     * Subsurface for another export.
+     *
+     * The copy is taken *after* the parse succeeds, which it did not used to be.
+     * That was harmless for as long as nothing read the directory back; now that
+     * something does, a share that turns out to be a zip or an empty read would
+     * otherwise take a place in the list and fail again on every attempt.
      */
     private fun readLog(uri: Uri): DiveLog {
         val text = contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() }
             ?: throw ParseException("could not open the shared file")
 
         val name = displayName(uri)
-        File(filesDir, "logs").mkdirs()
-        val saved = File(filesDir, "logs/${System.currentTimeMillis()}-${name ?: "log.ssrf"}")
-        runCatching { saved.writeText(text) }
 
         // Detection is by content: a shared URI frequently carries no usable
         // filename, and both formats routinely arrive as plain .xml anyway.
@@ -282,7 +345,73 @@ class MainActivity : ComponentActivity() {
         if (log.dives.isEmpty()) {
             throw ParseException("that log parsed fine, but it contains no dives")
         }
+
+        // Kept only now that it has parsed. Before, an unreadable share would
+        // take a place in the recent list and fail again on every attempt.
+        session.cache.save(name, text)
         return log
+    }
+
+    /**
+     * Open a remembered dive, in the look it was left in.
+     *
+     * No URI, no permission and no other app involved — the bytes are ours.
+     * Two things can still be wrong, and both are reported rather than papered
+     * over: the copy may be gone, and the dive may no longer be in it. The
+     * second is why [RecentDives.resolve] matches on the dive's number and time
+     * before falling back to its position — landing on a neighbouring dive
+     * because a logbook gained one would be a slate of the wrong dive, which
+     * looks exactly like a slate of the right one.
+     */
+    private fun openRecent(entry: RecentDives.Entry) {
+        val text = session.cache.read(entry.logName)
+        if (text == null) {
+            session.forget(entry)
+            state = LoadState.Failed(
+                "The copy of ${entry.logName} is gone, so ${entry.title} cannot be " +
+                    "re-opened. It has been dropped from the recent list."
+            )
+            return
+        }
+
+        state = try {
+            val log = parseText(text, hint = entry.logName, source = entry.logName)
+            val at = session.recents.resolve(log, entry)
+            if (at == null) {
+                session.forget(entry)
+                LoadState.Failed(
+                    "${entry.title} is no longer in ${entry.logName}, so it has been " +
+                        "dropped from the recent list."
+                )
+            } else {
+                // Restored for this dive only; see SessionState.editorSettings.
+                session.openInLook(entry.look)
+                LoadState.Loaded(listOf(log), openAt = listOf(DiveRef(0, at)))
+            }
+        } catch (e: Exception) {
+            session.forget(entry)
+            LoadState.Failed(
+                "${entry.logName} could not be re-read, and ${entry.title} has been " +
+                    "dropped from the recent list.\n\n" + describe(e)
+            )
+        }
+    }
+
+    /**
+     * Which cached log a parsed one came from.
+     *
+     * Derived rather than stored. The parser is handed the display name as
+     * `source`, and the cache names its files by the same name put through the
+     * same reduction, so the two cannot drift — a second field holding the
+     * answer could.
+     */
+    private fun editingDives(refs: List<DiveRef>): List<EditingDive> {
+        val loaded = state as? LoadState.Loaded ?: return emptyList()
+        return refs.mapNotNull { ref ->
+            val log = loaded.logs.getOrNull(ref.log) ?: return@mapNotNull null
+            val dive = log.dives.getOrNull(ref.dive) ?: return@mapNotNull null
+            EditingDive(LogCache.sanitise(log.source), dive, ref.dive)
+        }
     }
 
     /**
@@ -349,6 +478,9 @@ class MainActivity : ComponentActivity() {
     private fun loadBundledSample() {
         state = try {
             val text = assets.open("sample.ssrf").use { it.readBytes().decodeToString() }
+            // Cached like any other log, so a sample dive worked on once can be
+            // reached from the recent list rather than only from this button.
+            session.cache.save("sample.ssrf", text)
             LoadState.Loaded(listOf(parseText(text, hint = "sample.ssrf", source = "sample.ssrf")))
         } catch (e: Exception) {
             LoadState.Failed(describe(e))
@@ -416,7 +548,7 @@ class MainActivity : ComponentActivity() {
         val total = request.dives.size
         exportState = ExportState.Running("Saving", 0, total)
 
-        lifecycleScope.launch {
+        session.viewModelScope.launch {
             val (saved, problems) = withContext(Dispatchers.IO) {
                 val (exports, rendering) = slatesFor(request)
                 val failures = rendering.toMutableList()
@@ -424,7 +556,7 @@ class MainActivity : ComponentActivity() {
                 for ((i, export) in exports.withIndex()) {
                     exportState = ExportState.Running("Saving", i, total)
                     try {
-                        SlateFiles.saveToGallery(this@MainActivity, export)
+                        SlateFiles.saveToGallery(applicationContext, export)
                         written++
                     } catch (e: Exception) {
                         failures += "${export.name}: ${e.message ?: e::class.simpleName}"
@@ -458,6 +590,12 @@ class MainActivity : ComponentActivity() {
      * Instagram was absent. A transparent PNG is useful in a video editor, a
      * message, or a notes app, and the chooser is what lets the user say so.
      *
+     * Rebuilt as an extra button beside this one and removed a second time, on
+     * grounds that have nothing to do with either of those — Meta requires a
+     * registered app id, and a sticker with no background lands on a gradient
+     * rather than on the user's footage. The whole account is in CLAUDE.md;
+     * read it before writing this a fourth time.
+     *
      * The URIs travel in an extra, and extras are *not* walked by the automatic
      * grant that `addFlags` performs on an intent's data. Putting them in
      * [Intent.setClipData] as well is what actually carries the read permission
@@ -471,16 +609,16 @@ class MainActivity : ComponentActivity() {
         val total = request.dives.size
         exportState = ExportState.Running("Preparing", 0, total)
 
-        lifecycleScope.launch {
+        session.viewModelScope.launch {
             val (uris, problems) = withContext(Dispatchers.IO) {
                 val (exports, rendering) = slatesFor(request)
                 val failures = rendering.toMutableList()
-                SlateFiles.clearSlateCache(this@MainActivity)
+                SlateFiles.clearSlateCache(applicationContext)
                 val written = mutableListOf<Uri>()
                 for ((i, export) in exports.withIndex()) {
                     exportState = ExportState.Running("Preparing", i, total)
                     try {
-                        written += SlateFiles.writePng(this@MainActivity, export)
+                        written += SlateFiles.writePng(applicationContext, export)
                     } catch (e: Exception) {
                         failures += "${export.name}: ${e.message ?: e::class.simpleName}"
                     }
@@ -500,7 +638,14 @@ class MainActivity : ComponentActivity() {
                     "Sharing ${uris.size} of $total. ${firstProblem(problems)}"
                 )
             }
-            startActivity(Intent.createChooser(shareIntent(uris), "Share slate"))
+            // Through the session rather than started here: this coroutine now
+            // outlives the activity that began it, and a chooser started on a
+            // destroyed one is a share that silently never appears.
+            session.launch(Intent.createChooser(shareIntent(uris), "Share slate")) { e ->
+                state = state.withMessage(
+                    "Could not open the share sheet: ${e.message ?: e::class.simpleName}"
+                )
+            }
         }
     }
 
@@ -544,9 +689,9 @@ class MainActivity : ComponentActivity() {
         if (updateState is UpdateState.Checking) return
         if (announce) updateState = UpdateState.Checking
 
-        lifecycleScope.launch {
+        session.viewModelScope.launch {
             val outcome = withContext(Dispatchers.IO) { runCatching { UpdateCheck.check() } }
-            UpdateCheck.markChecked(this@MainActivity)
+            UpdateCheck.markChecked(applicationContext)
             outcome
                 .onSuccess { release ->
                     updateState = when {
@@ -575,10 +720,10 @@ class MainActivity : ComponentActivity() {
      */
     private fun downloadUpdate(release: UpdateCheck.Release) {
         updateState = UpdateState.Downloading(release, 0f)
-        lifecycleScope.launch {
+        session.viewModelScope.launch {
             val outcome = withContext(Dispatchers.IO) {
                 runCatching {
-                    UpdateCheck.download(this@MainActivity, release) { fraction ->
+                    UpdateCheck.download(applicationContext, release) { fraction ->
                         updateState = UpdateState.Downloading(release, fraction)
                     }
                 }
@@ -615,28 +760,26 @@ class MainActivity : ComponentActivity() {
         // routed via LoadState.withMessage becomes LoadState.Failed unless a log
         // is already open, which would replace the whole screen with the "that
         // did not load" page over a message about an install.
-        if (!UpdateCheck.canInstall(this)) {
+        if (!UpdateCheck.canInstall(applicationContext)) {
             updateState = UpdateState.Ready(
                 release,
                 apk,
                 note = "Allow Dive Slate to install apps, then tap Install again",
             )
-            runCatching { startActivity(UpdateCheck.unknownSourcesSettings(this)) }
-                .onFailure {
-                    updateState = UpdateState.Ready(
-                        release,
-                        apk,
-                        note = "This phone offers no page for allowing installs from " +
-                            "an app, so the APK has to be opened from your files",
-                    )
-                }
-            return
-        }
-        runCatching { startActivity(UpdateCheck.installIntent(this, apk)) }
-            .onFailure { e ->
-                updateState = UpdateState.Failed(
-                    "Android would not open the installer: ${e.message ?: e::class.simpleName}",
+            session.launch(UpdateCheck.unknownSourcesSettings(applicationContext)) {
+                updateState = UpdateState.Ready(
+                    release,
+                    apk,
+                    note = "This phone offers no page for allowing installs from " +
+                        "an app, so the APK has to be opened from your files",
                 )
             }
+            return
+        }
+        session.launch(UpdateCheck.installIntent(applicationContext, apk)) { e ->
+            updateState = UpdateState.Failed(
+                "Android would not open the installer: ${e.message ?: e::class.simpleName}",
+            )
+        }
     }
 }

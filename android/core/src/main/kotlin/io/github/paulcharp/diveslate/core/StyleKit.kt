@@ -706,13 +706,30 @@ internal fun dateLabel(dive: Dive): String? =
  * down — in both cases silently, so the map looks finished and is wrong. The
  * interval is chosen from the depth actually reached, in steps a diver reads
  * in, and the lines are labelled by the style that draws them.
+ *
+ * Returned **in the units being printed**, and the ladder of steps is chosen
+ * per system, because a round number is the whole point of a gridline: 10, 20,
+ * 30 in metres and 25, 50, 75 in feet are both what a diver reads, whereas feet
+ * converted from a metric ladder would label the map 33, 66, 98. The caller
+ * converts back with [metresOfDepth] to place them, so the geometry stays in
+ * the one canonical unit.
  */
-internal fun depthGridlines(maxDepthMetres: Double, count: Int = 3): List<Double> {
+internal fun depthGridlines(
+    maxDepthMetres: Double,
+    units: SlateUnits = SlateUnits.METRIC,
+    count: Int = 3,
+): List<Double> {
     if (maxDepthMetres <= 0.0 || count <= 0) return emptyList()
-    val rough = maxDepthMetres / (count + 1)
-    val step = listOf(1.0, 2.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0)
-        .firstOrNull { it >= rough } ?: 50.0
+    val max = depthInUnits(maxDepthMetres, units)
+    val rough = max / (count + 1)
+    val ladder = if (units == SlateUnits.METRIC) {
+        listOf(1.0, 2.0, 5.0, 10.0, 15.0, 20.0, 25.0, 30.0)
+    } else {
+        listOf(5.0, 10.0, 20.0, 25.0, 50.0, 60.0, 75.0, 100.0)
+    }
+    val coarsest = if (units == SlateUnits.METRIC) 50.0 else 150.0
+    val step = ladder.firstOrNull { it >= rough } ?: coarsest
     return generateSequence(step) { it + step }
-        .takeWhile { it < maxDepthMetres }
+        .takeWhile { it < max }
         .toList()
 }

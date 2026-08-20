@@ -41,8 +41,12 @@ object TopoStyle : SlateStyle {
 
         val site = dive.site?.takeIf { options.showSite && it.isNotEmpty() }?.uppercase()
         val date = if (options.showDate) dateLabel(dive)?.uppercase() else null
-        val gridlines = depthGridlines(dive.computedMaxDepthMetres)
-        val legend = gridlines.firstOrNull()?.let { "GRID ${trimmed(it)} M" }
+        // In whatever units the figures are printed in, so the map and the
+        // numbers beside it never quote two different scales.
+        val gridlines = depthGridlines(dive.computedMaxDepthMetres, options.units)
+        val legend = gridlines.firstOrNull()?.let {
+            "GRID ${trimmed(it)} ${options.units.depthLabel.uppercase()}"
+        }
 
         var headingHeight = 0f
         if (site != null || legend != null) headingHeight += m.siteSize
@@ -142,7 +146,8 @@ object TopoStyle : SlateStyle {
 
         // ---- grid ----------------------------------------------------------
         for (depth in gridlines) {
-            val lineY = frame.sy(depth)
+            // The gridline is quoted in display units; the frame maps metres.
+            val lineY = frame.sy(metresOfDepth(depth, options.units))
             ops.add(
                 SlateOp.Line(
                     start = Pt(frame.left, lineY), end = Pt(frame.right, lineY),
@@ -151,7 +156,7 @@ object TopoStyle : SlateStyle {
             )
             ops.add(
                 SlateOp.Text(
-                    text = "${trimmed(depth)} m",
+                    text = "${trimmed(depth)} ${options.units.depthLabel}",
                     x = frame.left + m.px(6f), baselineY = lineY - m.px(6f),
                     sizePx = m.labelSize * 0.8f,
                     fillArgb = theme.inkMuted, haloArgb = theme.halo, haloWidth = 0f,

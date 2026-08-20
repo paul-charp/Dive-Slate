@@ -34,7 +34,8 @@ tools/         Python. Palette maths and the generators for Themes.kt.
 ## Commands
 
 ```bash
-cd android && ./gradlew core:test          # 74 tests, no device needed
+cd android && ./gradlew core:test              # 87 tests, no device needed
+cd android && ./gradlew :app:testDebugUnitTest # 42 more, also no device
 cd android && ./gradlew :app:installDebug
 cd android && ./gradlew :app:assembleRelease   # signed if keystore.properties
                                                # is present, debug key if not —
@@ -102,10 +103,20 @@ android/core/
 android/app/
   MainActivity.kt     share intake, the intent handling described below,
                       and the batch export off the main thread
+  SessionState.kt     the ViewModel: open logs, current settings, export and
+                      update progress — everything a rotation must not take
+  SlateSettings.kt    the chosen look as one object, its normalisation rules,
+                      and the SharedPreferences store behind "save as default"
   SlatePainter.kt     paints core's display list onto a Canvas
   SlateFiles.kt       MediaStore export, FileProvider, export naming
+  LogCache.kt         the app's own copies of the logs it has been given
+  RecentDives.kt      the dives taken into the editor, the look each was given,
+                      and what that means for what is kept on disk
   UpdateCheck.kt      self-update: manifest, download, checksum, installer
   ui/DiveSlateApp.kt  Compose UI
+  src/test/           JVM tests for the three above that need no framework:
+                      the settings round trip, the export names, the manifest,
+                      dive identity and the retention rules
 
 tools/
   palette.py          OKLab/OKLCH maths, CVD simulation, the palette gates and
@@ -319,6 +330,12 @@ style, and *hides* the chip instead of greying it — a control that does nothin
 when pressed is worse than one never offered, the same rule the dive list
 applies to a row it cannot draw.
 
+**Retro has to *declare* that, and for a while it only did it in a comment.** It
+resamples for its own reasons and never calls `profileTrace`, so it ignored the
+flag rather than overriding it — which meant `supportsSmooth` stayed true, the
+chip was drawn, and pressing it did nothing. Ignoring a flag is not the same as
+answering it. Found by a test asking the question the UI asks.
+
 The smoothed profile is drawn through a coarser series — a spline through points a pixel apart is a
 polyline with extra arithmetic — using flat tangents, so each segment leaves one
 point horizontally and arrives at the next horizontally and the line stays inside
@@ -361,6 +378,250 @@ Two places where a style touches the data, both deliberate and both narrow:
   weight, and are drawn in the paper's brown rather than the survey blue. If
   anyone ever asks what interval they are at, delete them rather than inventing
   one.
+
+## The look is remembered, and nothing else about the app is
+
+Every control on the editor screen is one `SlateSettings` — style, layout,
+palette, units, opacity, elements, figures — and it lives in `SessionState`, a
+ViewModel, rather than in the composition that draws it.
+
+**That was a rotation bug before it was a feature.** All of it was `remember`ed
+inside the editor and the open dive log was a field on the activity, so turning
+the phone over destroyed both: a log opened from the picker went back to the
+start screen, and a look chosen over five minutes was gone. A share survived by
+accident — the intent is still attached to the recreated activity and got read
+again, which also meant the shared file was parsed a second time and every dive
+listed twice. `SessionState.handledIntent` is what stops the second read; the
+ViewModel is what stops the first loss.
+
+**The export and update coroutines run on `viewModelScope`, not
+`lifecycleScope`.** Once the state survives a rotation, work that does not is
+worse than before, not better: a cancelled batch would leave the progress bar
+stuck at "Saving 7 of 20" forever, because the state it is drawn from now
+outlives the coroutine that was writing it. Two consequences worth keeping:
+the file work takes `applicationContext`, and the chooser and the installer are
+parked in `SessionState.pendingLaunch` for whichever activity is on screen to
+start — an intent started on a destroyed activity is a share that silently never
+appears.
+
+**Saving is explicit, and there are three actions rather than one.** Persisting
+every slider drag would promote the last thing tried to the thing you always
+get, which is how a remembered default becomes a surprise; so the editor is a
+scratchpad and *Save as default* is a deliberate act. *Restore default* puts
+back what was saved and is enabled only when there is something to go back to
+and the current look differs from it. *Factory reset* goes back to what the app
+shipped with **and forgets the saved default** — one that left the saved look in
+place would put it back on the next launch, which is the state someone reaching
+for it is trying to leave — and it confirms first, being the one control that
+discards something the user made.
+
+**Where a control lives is a claim about how often it is touched.** The editor
+is one long scroll — roughly two phone screens — so a heading and a row is a
+real cost, and three controls do not earn one:
+
+* **The defaults go in the top bar's overflow menu**, in stock `DropdownMenu` /
+  `DropdownMenuItem` / `AlertDialog`, so they take the wallpaper scheme with the
+  rest of the chrome. They were a heading, a button row and a line of prose
+  permanently on screen for three actions taken a few times a year. The caption
+  the page used to carry moved to the foot of the menu, because "default" means
+  nothing until you know whether you have one.
+* **The units ride on the figures heading line.** They are one-of-two, so they
+  stay a `SingleChoiceSegmentedButtonRow` matching Layout rather than becoming
+  chips — but they sit beside the figures because printing those figures is the
+  only thing they do.
+* **The checkerboard toggle is drawn on the preview itself.** It is the one
+  control on the screen that never reaches the exported PNG, so it does not
+  belong among the switches deciding what the image says. Its glyph is hand-drawn
+  for the reason already recorded on `SelectionDot`: the APK carries Material's
+  40-icon core set, which has no checkerboard, and the extended set is thousands
+  of vectors for one mark. Its disc has to read on *both* states it toggles
+  between — the mid-grey checkerboard and the app surface underneath it — or the
+  control is unusable in exactly one direction.
+
+Together those are about 234dp off a 1360dp page, and none of it is a control
+that changes the exported image.
+
+**`SlateSettings.normalised()` is where a stored string stops being dangerous.**
+It is the only input in the app that can hold a state the UI cannot produce: a
+palette belonging to another style, four figures on a badge with room for two, a
+style id from a build since uninstalled. `renderOverlay` **refuses** a foreign
+palette, so a stored one would blank the preview on every launch with no way
+back except clearing the app's data. Normalisation adopts the palette (keeping
+the dark/light choice), clamps to the measured opacity floor, trims the figures
+to the layout's budget and drops keys this build does not know — and a test
+renders the full cross-product of what `decode` can return, because "anything
+storable is drawable" is the whole claim.
+
+Smoothing is deliberately *not* normalised away for the style that cannot
+honour it. `toOptions()` masks it instead, so what is drawn is right and what is
+remembered is what the user asked for — clearing the flag would mean one look at
+the segment screen silently threw the preference away for every style after it,
+which is the same reasoning that carries the dark/light choice across a style
+change.
+
+## Recent dives, and the only storage the app takes
+
+Every incoming log is copied to `filesDir/logs/`, because the permission on a
+`content://` URI dies with the activity that received it — stashing the URI to
+open later is a guaranteed bug. `LogCache` is that directory and nothing else;
+`RecentDives` is the list drawn from it and decides what is worth keeping.
+
+**Dives, not files.** The first version of this listed logbooks — `reference.ssrf,
+6 dives` — which left the finding to the reader when the thing they came back
+for is *that dive*. Listing dives makes the start screen a list of the slates
+that have been made, which is what the app is for. It also brings back the
+provenance problem the dive list is arranged around: dive numbers are
+per-logbook and collide, so the source file is on every row, or two rows read
+identically and neither can be told from the other.
+
+**Reaching the editor is what makes a dive recent**, not opening the file it is
+in — a 200-dive logbook would otherwise contribute 200 rows nobody chose.
+Opening the editor is a statement about one dive, or about each dive in a batch,
+and all of a batch is recorded. It is recorded again as the editor closes, so
+what is stored is the look the dive was *left* in.
+
+**A dive is identified by its number and its time, never by its position.** The
+list is sorted newest-first for display, so a stored index would move the moment
+a logbook gained a dive, and a remembered slate would quietly become a different
+dive's — which does not throw and does not look wrong. Both fields are optional
+in the model, so the raw position in the file is the last resort. A dive that
+cannot be found at all is dropped and said so, rather than resolved to a
+neighbour.
+
+**The look is stored per dive, and restoring it is scoped to that dive.** A
+reopened slate ought to reproduce the slate, so the recorded look is applied on
+the way in — but as `SessionState.editorSettings`, never as `settings`. Letting
+it become the session look would mean that opening an old dive silently changed
+what every dive after it opened with, which is precisely the failure the
+scratchpad model exists to prevent. It is cleared by a `LaunchedEffect` keyed on
+whether an editor is showing, **not** by the editor's disposal: a rotation
+disposes the composition too, and clearing there dropped the restored look every
+time the phone turned over.
+
+**Retention hangs off the dive list, so there is one authority rather than
+two.** Twenty dives; a cached log is kept exactly while some remembered dive
+still needs it, and deleted when none does. `MAX_BYTES` is a second and blunter
+bound — twenty dives across twenty large logbooks would satisfy the count and
+still cost hundreds of megabytes — and it is applied by *shortening the list*,
+oldest first, rather than by deleting files behind the list's back. A log is
+charged once however many dives point at it. **The newest entry is never
+dropped**: a single logbook larger than the whole budget is a real thing to
+open, and evicting the dive just worked on to satisfy a limit would empty the
+list at the moment it was most useful.
+
+**The sample dive is offered only while the recent list is empty**, and the
+line of prose above the buttons changes with it. The sample answers "what does
+this app do" for someone with no log in front of them; once there are real dives
+to go back to, it is a standing offer to look at someone else's dive instead of
+your own. A fixed caption naming a button that is not there would send half the
+readers looking for it.
+
+**Only what parsed is kept**, so the copy is taken *after* the parse. It used to
+be taken before, which was harmless for exactly as long as nothing read the
+directory back: a share that turns out to be a zip would otherwise hold a row
+and fail again on every attempt.
+
+**Everything a row draws is stored, never computed.** Parsing at list time would
+make the start screen cost whatever the largest cached logbook costs, on every
+launch. The figures stored are the *computed* ones — `computedMaxDepthMetres`,
+not the optional logged field — because that is what the slate prints, and a row
+quoting the logged field would read blank for exactly the dives whose slate
+shows a depth. The figures are also printed in the units of that dive's own
+look, since the row describes a slate that exists.
+
+**The index is one line per dive, pipe-separated, with the encoded settings
+last.** Same reasoning as `SlateSettings.encode`: the app carries no reflection
+and the release build is shrunk with R8, so a serialisation library would be a
+dependency and a keep rule for a dozen scalars. The pipe is the separator
+precisely because `LogCache.sanitise` removes it and `encode()` never emits it —
+and a site name is free text from a logbook, so pipes and newlines are stripped
+from it or one dive becomes two rows.
+
+**A display name is the one input in this app that can name a path.** It arrives
+from another app via `OpenableColumns.DISPLAY_NAME` and nothing obliges it to be
+a legal file name; `LogCache.sanitise` reduces it, and a test writes
+`../../evil.ssrf` and checks where it lands. Which cached file a parsed log came
+from is *derived* by putting `DiveLog.source` through the same reduction, rather
+than stored a second time where the two could drift.
+
+## Add to story has now been refused three times — read this first
+
+`ADD_TO_STORY` was this app's *only* export once, and `d75cf2b` removed it
+because being the only route made the button a bet on which app the user wanted,
+and on a phone without Instagram it degraded silently into the chooser it was
+supposed to be an alternative to. It was rebuilt in the shape that answers both
+objections — shown only when the package manager confirms Instagram is there,
+only for a single slate, always beside the chooser — and taken back out again,
+because those were never the binding constraints. These are:
+
+- **Meta requires a registered Facebook App ID.** Since January 2023 the intent
+  must carry one in `source_application`, or Instagram refuses with "The app you
+  shared from doesn't currently support sharing to Stories." No amount of
+  correct intent-building substitutes for it, and this project has no Meta app.
+- **A sticker with no background does not land on the user's footage.** It is
+  permitted — Meta's docs say a background asset, a sticker asset, or both — but
+  the story background then comes from `top_background_color` /
+  `bottom_background_color`, solid or gradient. The 2024 implementation passed
+  `top_background_color`, which is the evidence it had already met this. The
+  result is the slate on a coloured card, and there is no documented way for the
+  user to swap their own video in once the composer has opened.
+
+**So the feature is the background-media picker, not the intent.** A slate over
+your own footage requires the app to pass `background_video` or
+`background_image` itself, which means holding the media — the same gap the
+README lists under Known gaps. Done that way round the intent finally earns its
+place: background is the user's footage, `interactive_asset_uri` is the slate,
+and Instagram composites the two with the slate still draggable. Attempted in
+either order, that is the order.
+
+Two implementation details worth not rediscovering, if it is ever revived:
+
+- **The asset URI travels in an extra, so `addFlags` does not reach it.** The
+  automatic grant walks the intent's data and its ClipData and nothing else. For
+  multi-image sharing the fix was ClipData; here it cannot be, because Instagram
+  reads `interactive_asset_uri` and not the clip. `grantUriPermission` to the
+  package by name, or Instagram opens on an empty story — which looks exactly
+  like this app having produced nothing.
+- **A `<queries>` entry for `com.instagram.android` is what makes the "is it
+  installed" question answerable at all** from Android 11. Without it
+  `resolveActivity` returns null on every modern phone, and the button silently
+  never appears. If it returns, it stays one named package and never a wildcard:
+  everything else here is deliberately blind to what is on the phone.
+
+## Metric or imperial is a property of the reader
+
+The parsers already normalise `ft`, `psi` and `F` away — canonical units are
+metres, seconds, bar, Celsius, litres, whatever the exporting computer was set
+to — so `SlateUnits` is a presentation choice made at the far end, in
+`OverlayOptions`. A log written in feet and one written in metres produce the
+same slate; which units that slate *speaks* is the diver's choice, not the
+machine's.
+
+- **Convert first, round second.** 44.4 m is 146 ft. Rounding up to 45 m and
+  converting gives 148, which overstates the dive by nearly a metre — the badge
+  would be claiming a depth nobody reached. `ceilFeet` rounds the converted
+  value, and a test holds the ordering.
+- **Both systems or neither, never per figure.** A slate mixing feet with litres
+  is a set of numbers nobody's training pairs.
+- **The units decide how a figure is printed, never whether it exists.**
+  `availableStats` answers in metric for both, and the batch warning is built
+  from it.
+- **The survey's gridlines are chosen in the system they are labelled in.** A
+  metric ladder converted to feet labels the map 33, 66, 98 — numbers no diver
+  reads a depth as. `depthGridlines` takes the units and picks from a ladder per
+  system; `metresOfDepth` converts back for placement, so the geometry stays
+  canonical.
+- **`cf`, not `cu ft` or `ft³`.** It is what a shop means by an 80, it is two
+  characters in a column a corner badge gives 130px to, and the superscript is
+  the one glyph `SlateFont`'s character-count estimate could not be trusted for.
+  Consumption gets two decimals in cf/min against one in L/min, because the
+  imperial figure is around 0.6 and one decimal rounds too many real dives
+  together.
+- **A three-digit depth is exactly the change that fits Wide and collides at
+  Watch.** The figures share the width in equal columns, so the imperial
+  cross-product is rendered in `SlateUnitsTest` and the largest emitted text
+  measured — the same guard, and for the same reason, as the one that caught a
+  style undercutting its layout.
 
 ## Exporting several dives at once
 
@@ -778,7 +1039,8 @@ Two smaller things that were got wrong once each:
   summary; depth is the only thing mapped to vertical space.
 - The depth axis always starts at the surface.
 - Slate figures round **up** — 44.4 m is a 45 m dive (`ceilMetres`,
-  `ceilMinutes`).
+  `ceilMinutes`), and in feet the conversion comes first: 146 ft, not 148
+  (`ceilFeet`, `ceilDepth`).
 
 ## History worth knowing
 

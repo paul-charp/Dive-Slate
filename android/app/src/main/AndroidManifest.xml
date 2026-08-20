@@ -28,10 +28,14 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!--
-      No <queries> block. Sharing goes through the system chooser, which resolves
-      targets on the app's behalf without needing package visibility — the app
-      never asks what is installed, so Android 11+ visibility filtering has
-      nothing to hide from it.
+      No <queries> block, and the app asks nothing about what else is installed.
+      Sharing goes through the system chooser, which resolves targets on the
+      app's behalf without needing package visibility.
+
+      One was added briefly to gate an "Add to Instagram story" button on
+      Instagram actually being present. It came back out with the button — see
+      CLAUDE.md — and if that feature is ever revived, the <queries> entry comes
+      back with it and stays a single named package, never a wildcard.
     -->
 
     <application

@@ -8,6 +8,7 @@ import androidx.core.content.FileProvider
 import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
+import java.net.URI
 import java.net.URL
 import java.security.MessageDigest
 
@@ -97,7 +98,15 @@ object UpdateCheck {
         return release.takeIf { it.versionCode > BuildConfig.VERSION_CODE }
     }
 
-    private fun parse(body: String): Release {
+    /**
+     * Internal rather than private so the unit tests can reach it.
+     *
+     * What it checks — the host, the scheme, the shape of the checksum, the
+     * plausibility of the size — is the whole of what stands between a bad
+     * manifest and an APK this app asks Android to install, and none of it
+     * needs a device to exercise.
+     */
+    internal fun parse(body: String): Release {
         val json = JSONObject(body)
         val release = Release(
             // getInt/getString throw on a missing key, which is what should
@@ -114,9 +123,15 @@ object UpdateCheck {
         // its checksum is what makes the download verifiable. Pinning the host
         // anyway costs one comparison and means a manifest that somehow said
         // "fetch the APK from elsewhere" gets refused rather than followed.
-        val host = Uri.parse(release.apkUrl).host
-        require(Uri.parse(release.apkUrl).scheme == "https" && host in ALLOWED_HOSTS) {
-            "release APK is not hosted on GitHub: $host"
+        // java.net.URI rather than android.net.Uri, which is a stub in a JVM
+        // unit test and throws there — this check is the one most worth having
+        // a test for, so it is written in something a test can run.
+        // Deliberately strict: a URL this cannot parse is refused, not waved
+        // through with a null host.
+        val parsed = runCatching { URI(release.apkUrl) }.getOrNull()
+        val host = parsed?.host
+        require(parsed?.scheme == "https" && host in ALLOWED_HOSTS) {
+            "release APK is not hosted on GitHub: ${host ?: release.apkUrl}"
         }
         require(release.apkSha256.matches(Regex("[0-9a-f]{64}"))) {
             "release checksum is not a SHA-256 digest"

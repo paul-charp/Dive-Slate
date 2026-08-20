@@ -1,6 +1,8 @@
 package io.github.paulcharp.diveslate.core
 
+import java.util.Locale
 import kotlin.math.ceil
+import kotlin.math.roundToInt
 
 /**
  * Parsers for the quantity strings dive logs write into XML attributes.
@@ -165,3 +167,104 @@ fun formatDuration(seconds: Double): String {
     }
     return "$minutes:$paddedSecs"
 }
+
+// ---------------------------------------------------------------------------
+// what the slate prints
+
+/**
+ * Which system the figures are *printed* in.
+ *
+ * Nothing above this line is affected: parsing still normalises everything to
+ * metres, seconds, bar, Celsius and litres, whatever the exporting computer was
+ * set to, and the models stay canonical. This is a presentation choice made at
+ * the far end, so a log written in feet and one written in metres produce the
+ * same slate — the diver reading it decides which units that slate speaks, not
+ * whichever machine happened to write the file.
+ *
+ * Two systems and not a per-figure grid. A slate mixing feet with litres would
+ * be a set of numbers nobody's training pairs, and the point of the badge is to
+ * be read at a glance.
+ */
+enum class SlateUnits(val id: String, val label: String) {
+    /** Metres, degrees Celsius, litres. */
+    METRIC("metric", "Metric"),
+
+    /** Feet, degrees Fahrenheit, cubic feet. */
+    IMPERIAL("imperial", "Imperial");
+
+    /** What a depth is labelled with. */
+    val depthLabel: String get() = if (this == METRIC) "m" else "ft"
+
+    companion object {
+        fun byId(id: String): SlateUnits? = entries.firstOrNull { it.id == id }
+    }
+}
+
+/**
+ * Whole feet, always rounded up — the same convention as [ceilMetres].
+ *
+ * Rounding is applied to the converted value rather than to the metres, because
+ * 44.4 m is 145.7 ft and a diver reading feet expects 146, not the 148 that
+ * converting an already-rounded 45 would give. Round once, at the end, in the
+ * units being printed.
+ */
+fun ceilFeet(metres: Double): Int = ceil(metres * FEET_PER_METRE - 1e-9).toInt()
+
+/** Whole depth units, rounded up, in the system being printed. */
+fun ceilDepth(metres: Double, units: SlateUnits): Int =
+    if (units == SlateUnits.METRIC) ceilMetres(metres) else ceilFeet(metres)
+
+/** `(value, unit)` for a depth. */
+fun depthFigure(metres: Double, units: SlateUnits): Pair<String, String> =
+    ceilDepth(metres, units).toString() to units.depthLabel
+
+/**
+ * `(value, unit)` for a temperature, rounded to the nearest degree.
+ *
+ * To nearest rather than up: water temperature is a reading rather than a
+ * figure anyone's limits are computed against, and the ceiling convention is
+ * there so a badge never understates depth or runtime.
+ */
+fun temperatureFigure(celsius: Double, units: SlateUnits): Pair<String, String> =
+    if (units == SlateUnits.METRIC) {
+        celsius.roundToInt().toString() to "°C"
+    } else {
+        (celsius * 9.0 / 5.0 + 32.0).roundToInt().toString() to "°F"
+    }
+
+/**
+ * `(value, unit)` for a volume of gas breathed.
+ *
+ * `cf` rather than `cu ft` or `ft³`. It is what a shop means by an 80, it is
+ * two characters wide in a column a corner badge only gives 130px of, and the
+ * superscript form would be the one glyph on the slate whose width the
+ * character-count estimate in [SlateFont] cannot be relied on for.
+ */
+fun volumeFigure(litres: Double, units: SlateUnits): Pair<String, String> =
+    if (units == SlateUnits.METRIC) {
+        litres.roundToInt().toString() to "L"
+    } else {
+        (litres * CUFT_PER_LITRE).roundToInt().toString() to "cf"
+    }
+
+/**
+ * `(value, unit)` for a consumption rate.
+ *
+ * Two decimals in cubic feet against one in litres, because the imperial figure
+ * is around 0.6 and one decimal would round several real dives to the same
+ * number.
+ */
+fun consumptionFigure(litresPerMin: Double, units: SlateUnits): Pair<String, String> =
+    if (units == SlateUnits.METRIC) {
+        String.format(Locale.ENGLISH, "%.1f", litresPerMin) to "L/min"
+    } else {
+        String.format(Locale.ENGLISH, "%.2f", litresPerMin * CUFT_PER_LITRE) to "cf/min"
+    }
+
+/** A depth in metres, as the number the slate would print — unrounded. */
+fun depthInUnits(metres: Double, units: SlateUnits): Double =
+    if (units == SlateUnits.METRIC) metres else metres * FEET_PER_METRE
+
+/** A depth quoted in display units, back to the metres the geometry works in. */
+fun metresOfDepth(value: Double, units: SlateUnits): Double =
+    if (units == SlateUnits.METRIC) value else value / FEET_PER_METRE

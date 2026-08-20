@@ -35,6 +35,10 @@ video frame or a story and the shot still shows through.
   colour-blind separation and contrast — not eyeballed.
 - 📐 **Nothing invented.** A figure your log cannot answer is left off rather
   than guessed at.
+- 📏 **Metric or imperial.** Feet and Fahrenheit are your choice, not your dive
+  computer's — a log written either way prints either way.
+- 💾 **It remembers.** Settle on a look, save it as your default, and every dive
+  you share in opens that way.
 - 📶 **Works offline.** The only thing it ever asks the network is whether a
   newer release exists.
 
@@ -175,8 +179,14 @@ offers at least one dark and one light palette, and switching style keeps
 whichever you had: that choice is about the footage the slate lands on, which
 the incoming style knows nothing about.
 
-Also adjustable: which elements appear, which figures are shown, and the scrim
-panel's opacity.
+Also adjustable: **metric or imperial**, which elements appear, which figures are
+shown, and the scrim panel's opacity.
+
+Once it looks right, open the **⋮** menu and **Save as default** — every dive you
+open after that starts there. **Restore default** undoes an afternoon's fiddling,
+and **Factory reset** goes back to the shipped look and forgets the saved one.
+Nothing is saved behind your back: the controls are a scratchpad for the dive in
+front of you until you say otherwise.
 
 <details>
 <summary><strong>Why the opacity slider only moves the panel</strong></summary>
@@ -396,7 +406,8 @@ the release page in a browser instead.
 |---|---|
 | **Subsurface-mobile** | Export the dive and pick Dive Slate in the share sheet |
 | **A file on the phone** | Open it from the app, wherever it lives — several at once if you like |
-| **Neither** | The bundled sample dive, to see what the app does |
+| **Neither** | The bundled sample dive, offered until you have dives of your own |
+| **Again** | The last twenty dives are listed on the start screen |
 
 | Format | Extensions | Notes |
 | --- | --- | --- |
@@ -408,21 +419,35 @@ from. Nothing is merged or de-duplicated: two exports overlapping is an ordinary
 accident, and dive numbers are per-logbook, so any attempt to spot a duplicate
 across files would be a guess.
 
+### Recent dives
+
+A log shared with this app has to be copied on the way past — the permission
+that comes with it dies with the screen that received it — so the app already
+has a copy of everything you have opened. The start screen lists the **dives**
+you took into the editor, not the files they came from, because the thing you
+come back for is that dive. One tap and you are in the editor again.
+
+Each row also remembers **the look you gave that dive** and restores it, so
+reopening a slate reproduces the slate. That look applies to that dive only: it
+never becomes what the next dive opens with, because a remembered default that
+arrives by surprise is worse than no memory at all.
+
+It is a cache, not a library, and it says so: **twenty dives**, oldest dropped
+first, with the size on screen and a **Clear** that empties it. A log is kept
+exactly while some remembered dive still needs it, and there is an 8 MB backstop
+for anyone opening very large logbooks. The logs themselves live wherever you
+keep them and are never touched. A log that fails to parse is not cached at all
+— a file that cannot be opened has no business taking a place in a list of ways
+to open things.
+
 Detection reads file content, not the extension, so a renamed log still works.
 Subsurface's own database cannot be read directly — Android denies it to other
 apps — so the export is the only route in, not a workaround.
 
 ## Known gaps
 
-- Settings do not persist across launches: style, layout, palette, opacity and
-  figure choices reset every time. They do hold across a batch and across
-  stepping between dives — it is only leaving the editor that forgets them.
 - No background-media picker, so the palette cannot yet be judged against your
   own footage — only against the checkerboard.
-- No library. Every incoming log is already copied to `filesDir/logs/`, and
-  nothing ever reads that directory back, so re-rendering an old dive means
-  exporting it from Subsurface again. Surfacing what is already being saved is
-  the cheapest real improvement left.
 
 ## Build
 
@@ -435,7 +460,8 @@ in `android/local.properties`. The wrapper fetches its own Gradle. Android Studi
 is **not** required; it is only needed for the IDE and the emulator GUI.
 
 ```bash
-cd android && ./gradlew core:test          # 68 tests, no device
+cd android && ./gradlew core:test              # 87 tests, no device
+cd android && ./gradlew :app:testDebugUnitTest # 42 more, also no device
 cd android && ./gradlew :app:assembleRelease
 ```
 
