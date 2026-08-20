@@ -475,12 +475,20 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Open the dive that ships with the app.
+     *
+     * **Deliberately not cached**, which is what keeps it out of the recent
+     * list: `rememberEditing` records a dive only when the cache holds the log
+     * behind it. The recent list is dives of yours, and the sample is not one —
+     * it is there to answer "what does this app do" for someone who has not got
+     * a log in front of them. Recording it also hid the button that offers it,
+     * since that button is shown only while the list is empty, so one look at
+     * the sample took the sample away.
+     */
     private fun loadBundledSample() {
         state = try {
             val text = assets.open("sample.ssrf").use { it.readBytes().decodeToString() }
-            // Cached like any other log, so a sample dive worked on once can be
-            // reached from the recent list rather than only from this button.
-            session.cache.save("sample.ssrf", text)
             LoadState.Loaded(listOf(parseText(text, hint = "sample.ssrf", source = "sample.ssrf")))
         } catch (e: Exception) {
             LoadState.Failed(describe(e))

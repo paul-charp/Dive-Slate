@@ -110,17 +110,13 @@ class SessionState(application: Application) : AndroidViewModel(application) {
      *
      * Called on the way into the editor and again on the way out, so what is
      * stored is the look the user actually left the dive in. A dive whose log
-     * has no cached copy is skipped rather than recorded: the row would be one
-     * that cannot be opened, which is worse than no row at all.
+     * has no cached copy is dropped by [RecentDives.record], which is what
+     * keeps the bundled sample out of the list.
      */
     fun rememberEditing(dives: List<EditingDive>) {
-        var wrote = false
-        for (it in dives) {
-            if (!cache.has(it.logName)) continue
-            recents.record(it.logName, it.dive, it.position, effectiveSettings)
-            wrote = true
-        }
-        if (wrote) refreshRecent()
+        if (dives.isEmpty()) return
+        for (it in dives) recents.record(it.logName, it.dive, it.position, effectiveSettings)
+        refreshRecent()
     }
 
     /** Leaving the editor: the dive's own look stops applying. */
