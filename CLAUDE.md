@@ -799,8 +799,17 @@ procedure; this is what cost time.
   publish a build without offering it to every installed copy.
 - The updater is **framework-only** — `org.json` and `HttpURLConnection` — so it
   adds no dependency to the APK and needs no R8 keep rule.
-- **`REQUEST_INSTALL_PACKAGES` is Play-restricted.** If this app ever goes to the
-  Play Store, the self-updater goes with it.
+- **`REQUEST_INSTALL_PACKAGES` is Play-restricted.** The agreed shape for a
+  Play Store build (discussed 2026-10-05, nothing built): one branch, two product
+  flavors (`channel`: `github` / `play`, same applicationId). Only
+  `src/github/AndroidManifest.xml` adds `INTERNET` and `REQUEST_INSTALL_PACKAGES`,
+  and `BuildConfig.SELF_UPDATE` gates `UpdateCheck.kt` so R8 strips it from the
+  Play build. Not two branches, and the updater stays in the github flavor. Task
+  names change (`testGithubDebugUnitTest`…), so `ci.yml`, this file and the README
+  change in the same commit, and `tools/test_release_contract.py` must say it
+  checks the github flavor. On the first Play upload, give the **existing
+  keystore** as the app signing key, not a Google-generated one, so sideloaded
+  copies keep updating in place. That choice cannot be undone.
 - **Play Protect flags the self-updater, and that was weighed and accepted — do
   not remove it again.** Downloading a binary and asking Android to install it
   is, as *behaviour*, what a dropper does; behaviour is what gets scored, and a
@@ -1044,6 +1053,19 @@ Two smaller things that were got wrong once each:
 - Slate figures round **up** — 44.4 m is a 45 m dive (`ceilMetres`,
   `ceilMinutes`), and in feet the conversion comes first: 146 ft, not 148
   (`ceilFeet`, `ceilDepth`).
+
+## Ideas already decided
+
+- **Live contrast reading — refused (2026-08-20).** Sampling the chosen backdrop
+  and reporting the slate's real contrast, instead of the design-time worst case
+  in `tools/palette.py`. A preference, not a technical objection: don't pitch it
+  again unless Paul does. The background-media picker it leaned on is still
+  wanted on its own (README, Known gaps).
+- **Trip slate — parked (2026-08-20), liked.** One badge for a whole trip: dive
+  count, total runtime, deepest, site, month, with the profiles drawn as small
+  multiples. Parsers already handle Subsurface's `<trip>` nesting and batch
+  selection already addresses many dives, but it needs new figures and probably
+  a new `SlateLayout`. Raise it again once the recent-logs library ships.
 
 ## History worth knowing
 
